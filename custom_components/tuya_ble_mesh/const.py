@@ -23,7 +23,7 @@ DEVICE_TYPE_PLUG = "plug"
 DEVICE_TYPE_SIG_PLUG = "sig_plug"
 DEVICE_TYPE_SIG_LIGHT = "sig_light"
 CONF_MESH_NAME = "mesh_name"
-CONF_MESH_PASSWORD = "mesh_password"  # pragma: allowlist secret
+CONF_MESH_PASSWORD = "mesh_password"  # nosec B105  # pragma: allowlist secret
 CONF_MAC_ADDRESS = "mac_address"
 CONF_VENDOR_ID = "vendor_id"
 DEFAULT_VENDOR_ID = "0x1001"
@@ -35,6 +35,8 @@ CONF_UNICAST_TARGET = "unicast_target"
 CONF_UNICAST_OUR = "unicast_our"
 CONF_OP_ITEM_PREFIX = "op_item_prefix"
 CONF_IV_INDEX = "iv_index"
+CONF_INITIAL_SEQUENCE = "initial_sequence"
+CONF_BIND_MODELS = "bind_models"
 CONF_BRIDGE_HOST = "bridge_host"
 CONF_BRIDGE_PORT = "bridge_port"
 

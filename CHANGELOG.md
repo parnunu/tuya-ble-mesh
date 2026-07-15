@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.0] — 2026-07-16
+
+### Added
+- Native brightness control for imported SIG Mesh lights through Generic Level
+  Set (`0x8206`) and Level Status (`0x8208`).
+- Full signed Generic Level to Home Assistant brightness conversion (`0..255`).
+- Level notification callbacks and coordinator state updates.
+- Opt-in imported-light model binding for Generic OnOff (`0x1000`) and Generic
+  Level (`0x1002`), with replay-safe sequence resumption.
+
+### Changed
+- Imported SIG Mesh lights now expose Home Assistant `brightness` color mode
+  while retaining Generic OnOff power control.
+
+### Fixed
+- Reuse one Mesh transaction ID across BLE write retries while allocating a
+  fresh network sequence number per transmission.
+- Accept and use Home Assistant's BLE connection callback in `SIGMeshDevice`;
+  direct-adapter imported lights now construct successfully at runtime.
+
+---
+
 ## [0.39.2] — 2026-07-15
 
 ### Security documentation

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -19,7 +19,10 @@ from custom_components.tuya_ble_mesh.config_flow import (
     TuyaBLEMeshConfigFlow,
 )
 from custom_components.tuya_ble_mesh.config_flow_options import TuyaBLEMeshOptionsFlow
-from custom_components.tuya_ble_mesh.config_flow_sig import run_provision
+from custom_components.tuya_ble_mesh.config_flow_sig import (
+    configure_existing_sig_light,
+    run_provision,
+)
 from custom_components.tuya_ble_mesh.config_flow_validators import (
     _parse_json_body,
     _test_bridge_with_session,
@@ -479,6 +482,37 @@ class TestExistingSIGLightStep:
     """Test importing an already provisioned SIG Mesh lamp."""
 
     @pytest.mark.asyncio
+    async def test_configure_binds_onoff_and_level_models(self) -> None:
+        device = MagicMock()
+        device.connect = AsyncMock()
+        device.send_config_model_app_bind = AsyncMock(return_value=True)
+        device.get_seq.return_value = 45
+        device.disconnect = AsyncMock()
+
+        with patch(
+            "custom_components.tuya_ble_mesh.device_factory.create_device",
+            return_value=device,
+        ):
+            result = await configure_existing_sig_light(
+                "02:00:00:00:00:01",
+                {
+                    CONF_NET_KEY: _TEST_NET_KEY,
+                    CONF_DEV_KEY: _TEST_DEV_KEY,
+                    CONF_APP_KEY: _TEST_APP_KEY,
+                    CONF_UNICAST_TARGET: "00B0",
+                    "initial_sequence": 41,
+                    CONF_ADAPTER: "hci0",
+                },
+            )
+
+        assert result == 45
+        assert device.send_config_model_app_bind.await_args_list == [
+            call(0x00B0, 0, 0x1000),
+            call(0x00B0, 0, 0x1002),
+        ]
+        device.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_user_step_branches_to_existing_sig_light(self) -> None:
         flow = _make_flow()
 
@@ -538,6 +572,36 @@ class TestExistingSIGLightStep:
 
         assert result["type"] == "create_entry"
         assert result["data"] == import_data
+
+    @pytest.mark.asyncio
+    async def test_import_can_bind_light_models_and_advance_sequence(self) -> None:
+        flow = _make_flow()
+        flow.context = {"source": "import"}
+        import_data = {
+            CONF_MAC_ADDRESS: "02:00:00:00:00:01",
+            CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
+            CONF_NET_KEY: _TEST_NET_KEY,
+            CONF_DEV_KEY: _TEST_DEV_KEY,
+            CONF_APP_KEY: _TEST_APP_KEY,
+            CONF_UNICAST_TARGET: "00B0",
+            CONF_UNICAST_OUR: "0001",
+            CONF_IV_INDEX: 0,
+            CONF_ADAPTER: "hci0",
+            "initial_sequence": 41,
+            "bind_models": True,
+        }
+
+        with patch(
+            "custom_components.tuya_ble_mesh.config_flow_sig.configure_existing_sig_light",
+            new=AsyncMock(return_value=45),
+            create=True,
+        ) as configure:
+            result = await flow.async_step_import(import_data)
+
+        configure.assert_awaited_once()
+        assert result["type"] == "create_entry"
+        assert result["data"]["initial_sequence"] == 45
+        assert "bind_models" not in result["data"]
 
 
 @pytest.mark.requires_ha

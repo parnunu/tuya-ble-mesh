@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?logo=homeassistantcommunitystore)](https://github.com/hacs/integration)
 [![CI](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.39.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.40.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![HA 2024.1+](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/parnunu/tuya-ble-mesh/actions)
@@ -10,7 +10,7 @@
 A fully local Home Assistant integration for controlling Tuya BLE Mesh devices. No cloud. No Tuya account required for daily use.
 
 This fork adds HACS-packaged direct control for already-provisioned SIG Mesh
-Generic On/Off lights using a dedicated local BlueZ adapter.
+Generic On/Off and Generic Level lights using a dedicated local BlueZ adapter.
 
 ## What is this?
 
@@ -40,7 +40,7 @@ For SIG Mesh devices, any ESPHome device with BLE proxy enabled can be used inst
 ```
 Home Assistant custom integration  ←BlueZ/hci0→  SIG Mesh Light
 ```
-Already-provisioned Generic On/Off lights can be imported with their NetKey,
+Already-provisioned Generic On/Off and Generic Level lights can be imported with their NetKey,
 DevKey, AppKey, unicast addresses, and IV index. The selected adapter is owned
 directly by this integration; do not let another process own the same adapter.
 
@@ -53,7 +53,7 @@ Direct mode requires a dedicated local BlueZ adapter.
 |--------|-------|------|--------|
 | LED Driver 9952126 | Malmbergs | Dimmable LED driver | ✅ Tested — on/off, brightness |
 | Smart Plug S17 | Malmbergs | BLE Mesh relay plug | ✅ Tested — on/off, SIG Mesh provisioned |
-| Generic SIG Mesh light | Tuya-compatible | SIG Mesh Generic On/Off light | ✅ Tested — direct local BLE on/off |
+| Generic SIG Mesh light | Tuya-compatible | SIG Mesh Generic On/Off + Level light | ✅ On/off tested; brightness implemented for model `0x1002` |
 
 ### Potentially Compatible
 
@@ -133,11 +133,16 @@ The integration will scan for nearby BLE Mesh devices automatically. Select your
 | Vendor ID | Vendor identifier (hex) | `0x1001` |
 
 For an already-provisioned SIG Mesh lamp, select **Existing SIG Mesh Light
-(On/Off)** and enter its 32-hex-character NetKey, DevKey, AppKey, device and
+(On/Off + Brightness)** and enter its 32-hex-character NetKey, DevKey, AppKey, device and
 controller unicast addresses, IV index, and dedicated BlueZ adapter (normally
 `hci0`). These credentials remain in Home Assistant's local config-entry
 storage, which is not encrypted. Protect the HA config directory and backups.
 The credentials are not sent to a cloud service.
+
+Advanced import/migration tooling can also provide an `initial_sequence` value
+and `bind_models: true`. This resumes above prior commissioning traffic and
+binds AppKey index `0` to Generic OnOff Server `0x1000` and Generic Level Server
+`0x1002`, avoiding Mesh replay-protection failures after migration.
 
 ### Bridge Daemon
 

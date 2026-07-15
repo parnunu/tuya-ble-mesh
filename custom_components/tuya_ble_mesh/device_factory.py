@@ -15,6 +15,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
     CONF_DEV_KEY,
+    CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
     CONF_MESH_ADDRESS,
     CONF_MESH_NAME,
@@ -149,7 +150,7 @@ def _create_sig_plug(
         f"{op_prefix}-app-key/password": app_key,
     }
 
-    return SIGMeshDevice(
+    device = SIGMeshDevice(
         mac_address,
         target_addr,
         our_addr,
@@ -160,6 +161,8 @@ def _create_sig_plug(
         ble_connect_callback=ble_connect_callback,
         adapter=adapter,
     )
+    device.set_seq(int(data.get(CONF_INITIAL_SEQUENCE, 0)))
+    return device
 
 
 def _create_default_mesh_device(

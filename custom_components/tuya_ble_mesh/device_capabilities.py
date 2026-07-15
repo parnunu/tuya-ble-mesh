@@ -23,6 +23,7 @@ class DeviceCapabilities:
             TelinkBridgeDevice) that push state via ``register_status_callback``.
         has_onoff_callback: True for SIG Mesh devices
             (SIGMeshDevice, SIGMeshBridgeDevice).
+        has_level_callback: True for SIG Mesh devices supporting Generic Level status.
         has_vendor_callback: True for SIG Mesh devices.
         has_composition_callback: True for SIG Mesh devices.
         has_sig_sequence: True when the device exposes ``set_seq``/``get_seq``
@@ -37,6 +38,7 @@ class DeviceCapabilities:
 
     has_status_callback: bool
     has_onoff_callback: bool
+    has_level_callback: bool
     has_vendor_callback: bool
     has_composition_callback: bool
     has_sig_sequence: bool
@@ -61,6 +63,7 @@ class DeviceCapabilities:
         return cls(
             has_status_callback=hasattr(device, "register_status_callback"),
             has_onoff_callback=hasattr(device, "register_onoff_callback"),
+            has_level_callback=hasattr(device, "register_level_callback"),
             has_vendor_callback=hasattr(device, "register_vendor_callback"),
             has_composition_callback=hasattr(device, "register_composition_callback"),
             has_sig_sequence=hasattr(device, "set_seq") and hasattr(device, "get_seq"),

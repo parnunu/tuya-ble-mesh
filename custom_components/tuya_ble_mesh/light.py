@@ -261,17 +261,17 @@ async def async_setup_entry(
     coordinator: TuyaBLEMeshCoordinator = runtime_data.coordinator
     device_info: DeviceInfo = runtime_data.device_info
     if device_type == DEVICE_TYPE_SIG_LIGHT:
-        async_add_entities([TuyaSIGMeshOnOffLight(coordinator, entry.entry_id, device_info)])
+        async_add_entities([TuyaSIGMeshLight(coordinator, entry.entry_id, device_info)])
         return
     async_add_entities([TuyaBLEMeshLight(coordinator, entry.entry_id, device_info)])
 
 
-class TuyaSIGMeshOnOffLight(TuyaBLEMeshEntity, LightEntity):
-    """On/off-only light backed by a provisioned SIG Mesh GenericOnOff server."""
+class TuyaSIGMeshLight(TuyaBLEMeshEntity, LightEntity):
+    """Dimmable light backed by provisioned SIG Mesh Generic OnOff/Level servers."""
 
     _attr_should_poll = False
-    _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.ONOFF}
-    _attr_color_mode = ColorMode.ONOFF
+    _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.BRIGHTNESS}
+    _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_features = LightEntityFeature(0)
     _attr_name = None
 
@@ -290,9 +290,26 @@ class TuyaSIGMeshOnOffLight(TuyaBLEMeshEntity, LightEntity):
         """Return the acknowledged on/off state."""
         return bool(self.coordinator.state.is_on)
 
+    @property
+    def brightness(self) -> int | None:
+        """Return the confirmed HA brightness."""
+        value = self.coordinator.state.brightness
+        if not self.coordinator.state.is_on or value <= 0:
+            return None
+        return min(int(value), 255)
+
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the light on through the coordinator retry path."""
+        """Turn on or set brightness through the coordinator retry path."""
         try:
+            brightness = kwargs.get("brightness")
+            if brightness is not None:
+                brightness = max(0, min(int(brightness), 255))
+                level = brightness * 257 - 32768
+                await self.coordinator.send_command_with_retry(
+                    lambda: self.coordinator.device.send_level(level),
+                    description=f"send_level({level})",
+                )
+                return
             await self.coordinator.send_command_with_retry(
                 lambda: self.coordinator.device.send_power(True),
                 description="send_power(True)",

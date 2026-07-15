@@ -23,9 +23,12 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
 from custom_components.tuya_ble_mesh.const import (
     CONF_ADAPTER,
     CONF_APP_KEY,
+    CONF_BIND_MODELS,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
     CONF_DEV_KEY,
+    CONF_DEVICE_TYPE,
+    CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
     CONF_NET_KEY,
     CONF_UNICAST_OUR,
@@ -41,10 +44,30 @@ _LOGGER = logging.getLogger(__name__)
 # Unicast addresses used during provisioning
 _UNICAST_PROVISIONER = 0x0001
 _UNICAST_DEVICE_DEFAULT = 0x00B0
-# GenericOnOff Server SIG Model ID
+# Generic model server IDs used by direct lights
 _MODEL_GENERIC_ONOFF_SERVER = 0x1000
+_MODEL_GENERIC_LEVEL_SERVER = 0x1002
 # Seconds to wait for device to reboot as Proxy Service after provisioning
 _POST_PROV_REBOOT_DELAY = 6.0
+
+
+async def configure_existing_sig_light(mac: str, config_data: dict[str, Any]) -> int:
+    """Bind control models and return the next replay-safe sequence number."""
+    from custom_components.tuya_ble_mesh.device_factory import create_device
+
+    data = dict(config_data)
+    data[CONF_DEVICE_TYPE] = DEVICE_TYPE_SIG_LIGHT
+    device = create_device(DEVICE_TYPE_SIG_LIGHT, mac, data)
+    try:
+        await device.connect(timeout=20.0, max_retries=3)
+        target = int(str(data.get(CONF_UNICAST_TARGET, "00B0")), 16)
+        for model_id in (_MODEL_GENERIC_ONOFF_SERVER, _MODEL_GENERIC_LEVEL_SERVER):
+            if not await device.send_config_model_app_bind(target, 0, model_id):
+                msg = f"Model App Bind failed for model 0x{model_id:04X}"
+                raise RuntimeError(msg)
+        return int(device.get_seq())
+    finally:
+        await device.disconnect()
 
 
 async def run_provision(hass: Any, mac: str) -> tuple[str, str, str]:
@@ -278,7 +301,7 @@ async def async_step_sig_plug(flow: Any, user_input: dict[str, Any] | None) -> F
 
 
 async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> FlowResult:
-    """Import an already provisioned SIG Mesh GenericOnOff light."""
+    """Import an already provisioned SIG Mesh Generic OnOff/Level light."""
     errors: dict[str, str] = {}
     if user_input is not None and flow._discovery_info is not None:
         for field in (CONF_NET_KEY, CONF_DEV_KEY, CONF_APP_KEY):
@@ -296,21 +319,41 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
         if error := _validate_iv_index(iv_index):
             errors[CONF_IV_INDEX] = error
 
+        try:
+            initial_sequence = int(user_input.get(CONF_INITIAL_SEQUENCE, 0))
+        except (TypeError, ValueError):
+            errors[CONF_INITIAL_SEQUENCE] = "invalid_sequence"
+            initial_sequence = 0
+        if not 0 <= initial_sequence <= 0xFFFFFF:
+            errors[CONF_INITIAL_SEQUENCE] = "invalid_sequence"
+
+        mac = flow._discovery_info["address"].upper()
+        if not errors and user_input.get(CONF_BIND_MODELS, False):
+            try:
+                initial_sequence = await configure_existing_sig_light(mac, user_input)
+            except Exception as exc:
+                _LOGGER.warning("SIG Mesh model binding failed for %s: %s", mac, exc)
+                errors["base"] = "model_bind_failed"
+
         if not errors:
-            mac = flow._discovery_info["address"].upper()
             await flow.async_set_unique_id(mac)
             flow._abort_if_unique_id_configured()
+            extra: dict[str, Any] = {
+                "unicast_target": str(user_input.get(CONF_UNICAST_TARGET, "00B0")).upper(),
+                "unicast_our": str(user_input.get(CONF_UNICAST_OUR, "0001")).upper(),
+                "iv_index": iv_index,
+                "net_key": str(user_input[CONF_NET_KEY]),
+                "dev_key": str(user_input[CONF_DEV_KEY]),
+                "app_key": str(user_input[CONF_APP_KEY]),
+                "adapter": str(user_input.get(CONF_ADAPTER, "hci0")),
+            }
+            if CONF_INITIAL_SEQUENCE in user_input or user_input.get(CONF_BIND_MODELS, False):
+                extra[CONF_INITIAL_SEQUENCE] = initial_sequence
             return flow._finalize_entry(
                 mac=mac,
                 device_type=DEVICE_TYPE_SIG_LIGHT,
                 title=flow._discovery_info.get("name") or None,
-                unicast_target=str(user_input.get(CONF_UNICAST_TARGET, "00B0")).upper(),
-                unicast_our=str(user_input.get(CONF_UNICAST_OUR, "0001")).upper(),
-                iv_index=iv_index,
-                net_key=str(user_input[CONF_NET_KEY]),
-                dev_key=str(user_input[CONF_DEV_KEY]),
-                app_key=str(user_input[CONF_APP_KEY]),
-                adapter=str(user_input.get(CONF_ADAPTER, "hci0")),
+                **extra,
             )
 
     return flow.async_show_form(

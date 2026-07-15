@@ -69,6 +69,10 @@ OP_GENERIC_ONOFF_GET = 0x8201
 OP_GENERIC_ONOFF_SET = 0x8202
 OP_GENERIC_ONOFF_STATUS = 0x8204
 
+# --- Generic Level model opcodes (Mesh Model 3.3) ---
+OP_GENERIC_LEVEL_SET = 0x8206
+OP_GENERIC_LEVEL_STATUS = 0x8208
+
 # --- Tuya Vendor Model (CID 0x07D0) ---
 TUYA_VENDOR_OPCODE = 0xCDD007
 TUYA_VENDOR_WRITE_ACK = 0xC9D007
@@ -217,6 +221,14 @@ def generic_onoff_set(on: bool, tid: int = 0) -> bytes:
 def generic_onoff_get() -> bytes:
     """Generic OnOff Get (opcode 0x8201)."""
     return struct.pack(">H", OP_GENERIC_ONOFF_GET)
+
+
+def generic_level_set(level: int, tid: int = 0) -> bytes:
+    """Generic Level Set (opcode 0x8206)."""
+    if not -32768 <= level <= 32767:
+        msg = f"level must be -32768..32767, got {level}"
+        raise ProtocolError(msg)
+    return struct.pack(">H", OP_GENERIC_LEVEL_SET) + struct.pack("<hB", level, tid & 0xFF)
 
 
 # ============================================================
@@ -412,6 +424,16 @@ def format_status_response(opcode: int, params: bytes) -> str:
         msg = f"OnOff Status: {'ON' if state else 'OFF'}"
         if len(params) >= 3:
             msg += f" (target={'ON' if params[1] else 'OFF'}, remaining={params[2]})"
+        return msg
+
+    if opcode == OP_GENERIC_LEVEL_STATUS:
+        if len(params) < 2:
+            return "Generic Level Status: malformed"
+        level = struct.unpack_from("<h", params)[0]
+        msg = f"Generic Level Status: {level}"
+        if len(params) >= 5:
+            target = struct.unpack_from("<h", params, 2)[0]
+            msg += f" (target={target}, remaining={params[4]})"
         return msg
 
     return f"Opcode 0x{opcode:04X}: {len(params)} bytes"

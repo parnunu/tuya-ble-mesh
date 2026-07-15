@@ -344,6 +344,20 @@ class TestDispatchPayloadUnlocked:
         # Future result should still be the original value
         assert future.result() == b"\x99"
 
+    @pytest.mark.asyncio
+    async def test_dispatches_generic_level_status(self) -> None:
+        dev = _make_device()
+        callback = MagicMock()
+        dev.register_level_callback(callback)
+
+        await dev._dispatch_access_payload_unlocked(
+            0x0001,
+            0x8208,
+            b"\x00\x40",  # signed little-endian level 16384
+        )
+
+        callback.assert_called_once_with(16384)
+
 
 # ---------------------------------------------------------------------------
 # Callback exception handling

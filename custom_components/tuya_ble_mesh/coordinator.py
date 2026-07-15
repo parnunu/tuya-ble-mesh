@@ -720,6 +720,28 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
             **fields,
         )
 
+    def _on_level_update(self, level: int) -> None:
+        """Handle a Generic Level Status notification."""
+        brightness = round((level + 32768) * 255 / 65535)
+        is_on = brightness > 0
+        was_available = self._state.available
+        changed = self._state.brightness != brightness or self._state.is_on != is_on
+        now = time.time()
+        self._state = self._make_notify_state(
+            now,
+            brightness=brightness,
+            is_on=is_on,
+            last_confirmed_state=MappingProxyType(
+                {"is_on": is_on, "brightness": brightness}
+            ),
+        )
+        self._conn_mgr.backoff = _INITIAL_BACKOFF
+        if changed:
+            self._conn_mgr.record_state_change()
+        self._maybe_persist_seq()
+        if changed or not was_available:
+            self._dispatch_update()
+
     def _on_onoff_update(self, on: bool) -> None:
         was_available = self._state.available
         changed = self._state.is_on != on
@@ -930,6 +952,8 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
         await self._load_seq()
         if self.capabilities.has_onoff_callback:
             self._device.register_onoff_callback(self._on_onoff_update)
+        if self.capabilities.has_level_callback:
+            self._device.register_level_callback(self._on_level_update)
         if self.capabilities.has_vendor_callback:
             self._device.register_vendor_callback(self._on_vendor_update)
         if self.capabilities.has_composition_callback:
@@ -980,6 +1004,7 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
             # Always unregister callbacks and disconnect — even if cancel_tasks raises.
             for attr, cb in (
                 ("unregister_onoff_callback", self._on_onoff_update),
+                ("unregister_level_callback", self._on_level_update),
                 ("unregister_vendor_callback", self._on_vendor_update),
                 ("unregister_composition_callback", self._on_composition_update),
                 ("unregister_status_callback", self._on_status_update),

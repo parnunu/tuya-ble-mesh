@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import struct
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -45,6 +46,7 @@ _REASSEMBLY_TIMEOUT = 10.0
 
 # Opcodes for status responses
 _OPCODE_ONOFF_STATUS = 0x8204
+_OPCODE_LEVEL_STATUS = 0x8208
 _OPCODE_APPKEY_STATUS = 0x8003
 _OPCODE_MODEL_APP_STATUS = 0x803E
 
@@ -83,6 +85,7 @@ class SIGMeshDeviceSegmentsMixin:
     _pending_responses: dict[tuple[int, int], asyncio.Future[bytes]]
     _pending_notify_tasks: set[asyncio.Task[None]]
     _onoff_callbacks: list[Any]
+    _level_callbacks: list[Any]
     _vendor_callbacks: list[Any]
     _composition_callbacks: list[Any]
     _disconnect_callbacks: list[Any]
@@ -357,6 +360,16 @@ class SIGMeshDeviceSegmentsMixin:
                     raise
                 except Exception:
                     _LOGGER.warning("OnOff callback error", exc_info=True)
+        elif opcode == _OPCODE_LEVEL_STATUS and len(params) >= 2:
+            level = struct.unpack_from("<h", params)[0]
+            _LOGGER.info("Generic Level Status from 0x%04X: %d", src, level)
+            for callback in list(self._level_callbacks):
+                try:
+                    callback(level)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    _LOGGER.warning("Level callback error", exc_info=True)
         elif opcode == _OPCODE_COMPOSITION_STATUS:
             self._handle_composition_data(params)
         elif opcode > 0xFFFF:

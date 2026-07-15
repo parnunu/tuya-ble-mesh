@@ -321,6 +321,21 @@ class TestDisconnectCallback:
 
 
 @pytest.mark.requires_ha
+class TestLevelUpdate:
+    """Test Generic Level status updates for SIG Mesh lights."""
+
+    def test_midpoint_maps_to_ha_brightness_128(self) -> None:
+        device = make_mock_device()
+        coord = TuyaBLEMeshCoordinator(device)
+
+        coord._on_level_update(0)
+
+        assert coord.state.brightness == 128
+        assert coord.state.is_on is True
+        assert coord.state.available is True
+
+
+@pytest.mark.requires_ha
 class TestOnOffUpdate:
     """Test _on_onoff_update for SIG Mesh devices."""
 
@@ -374,8 +389,10 @@ class TestSIGMeshCoordinator:
         device.connect = AsyncMock()
         device.disconnect = AsyncMock()
         device.register_onoff_callback = MagicMock()
+        device.register_level_callback = MagicMock()
         device.register_disconnect_callback = MagicMock()
         device.unregister_onoff_callback = MagicMock()
+        device.unregister_level_callback = MagicMock()
         device.unregister_disconnect_callback = MagicMock()
         device.is_connected = True
         device.firmware_version = None
@@ -384,12 +401,14 @@ class TestSIGMeshCoordinator:
         await coord.async_initial_connect()
 
         device.register_onoff_callback.assert_called_once()
+        device.register_level_callback.assert_called_once_with(coord._on_level_update)
         device.register_disconnect_callback.assert_called_once()
         # No register_status_callback since SIG device doesn't have it
         assert not hasattr(device, "register_status_callback") or True
 
         await coord.async_stop()
         device.unregister_onoff_callback.assert_called_once()
+        device.unregister_level_callback.assert_called_once_with(coord._on_level_update)
 
     @pytest.mark.asyncio
     async def test_start_wires_both_for_dual_device(self) -> None:

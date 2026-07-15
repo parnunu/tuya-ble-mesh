@@ -53,7 +53,7 @@
       },
       "sig_light": {
         "title": "Import {name}",
-        "description": "Enter the keys and addresses from the existing SIG Mesh network. Keys are stored in Home Assistant's local config-entry storage, which is not encrypted; protect your config directory and backups. Keys are never sent to a cloud service.",
+        "description": "Enter the keys and addresses from the existing SIG Mesh network for local Generic OnOff and Generic Level control. Keys are stored in Home Assistant's local config-entry storage, which is not encrypted; protect your config directory and backups. Keys are never sent to a cloud service.",
         "data": {
           "net_key": "Network key",
           "dev_key": "Device key",
@@ -132,6 +132,8 @@
       "timeout": "Connection timed out. Make sure the device is powered on and close by, then try again.",
       "device_not_found": "Device not found. Make sure it's powered on and within Bluetooth range, then try again.",
       "invalid_iv_index": "Enter a number between 0 and 4,294,967,295.",
+      "invalid_sequence": "Enter a sequence number between 0 and 16,777,215.",
+      "model_bind_failed": "Could not bind the light's local on/off and brightness models. Check the mesh keys, sequence number, and Bluetooth adapter.",
       "invalid_unicast_address": "Enter a 4-character hex address between 0001 and 7FFF (e.g. 00B0).",
       "provisioning_appkey_failed": "Could not bind the application key. Try factory resetting the device, then add it again.",
       "provisioning_proxy_failed": "Proxy Service step failed. Make sure the device has Proxy Service enabled, then try again.",

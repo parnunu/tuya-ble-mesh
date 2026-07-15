@@ -40,6 +40,7 @@ from tuya_ble_mesh.sig_mesh_protocol import (
     config_composition_get,
     config_model_app_bind,
     encrypt_network_pdu,
+    generic_level_set,
     generic_onoff_set,
     make_access_segmented,
     make_access_unsegmented,
@@ -117,12 +118,12 @@ class SIGMeshDeviceCommandsMixin:
 
         last_error: Exception | None = None
         backoff = _BLE_WRITE_RETRY_INITIAL_BACKOFF
+        transaction_id = self._tid
+        self._tid = (self._tid + 1) & 0xFF
 
         for attempt in range(1, max_retries + 1):
             try:
-                access_payload = generic_onoff_set(on, self._tid)
-                self._tid = (self._tid + 1) & 0xFF
-
+                access_payload = generic_onoff_set(on, transaction_id)
                 seq = await self._next_seq()
 
                 transport_pdu = make_access_unsegmented(
@@ -176,6 +177,75 @@ class SIGMeshDeviceCommandsMixin:
                     type(exc).__name__,
                     backoff,
                 )
+                await asyncio.sleep(backoff)
+                backoff *= _BLE_WRITE_RETRY_BACKOFF_MULTIPLIER
+
+        msg = f"BLE write failed for {self._address} after {max_retries} attempts"
+        raise MeshConnectionError(msg) from last_error
+
+    async def send_level(
+        self, level: int, *, max_retries: int = DEFAULT_SIG_MESH_MAX_RETRIES
+    ) -> None:
+        """Send Generic Level Set command with retry."""
+        if self._client is None or self._keys is None:
+            msg = "Not connected"
+            raise SIGMeshError(msg)
+
+        app_key = self._keys.app_key
+        if app_key is None:
+            msg = "No application key loaded"
+            raise SIGMeshKeyError(msg)
+
+        last_error: Exception | None = None
+        backoff = _BLE_WRITE_RETRY_INITIAL_BACKOFF
+        transaction_id = self._tid
+        self._tid = (self._tid + 1) & 0xFF
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                access_payload = generic_level_set(level, transaction_id)
+                seq = await self._next_seq()
+                transport_pdu = make_access_unsegmented(
+                    app_key,
+                    self._our_addr,
+                    self._target_addr,
+                    seq,
+                    self._keys.iv_index,
+                    access_payload,
+                    akf=1,
+                    aid=self._keys.aid,
+                )
+                network_pdu = encrypt_network_pdu(
+                    self._keys.enc_key,
+                    self._keys.priv_key,
+                    self._keys.nid,
+                    ctl=0,
+                    ttl=_DEFAULT_TTL,
+                    seq=seq,
+                    src=self._our_addr,
+                    dst=self._target_addr,
+                    transport_pdu=transport_pdu,
+                    iv_index=self._keys.iv_index,
+                )
+                await self._client.write_gatt_char(
+                    self._proxy_data_in,
+                    make_proxy_pdu(network_pdu),
+                    response=False,
+                )
+                _LOGGER.info(
+                    "Generic Level %d sent to 0x%04X (seq=%d, attempt=%d)",
+                    level,
+                    self._target_addr,
+                    seq,
+                    attempt,
+                )
+                return
+            except (SIGMeshError, SIGMeshKeyError):
+                raise
+            except (BleakError, OSError) as exc:
+                last_error = exc
+                if attempt >= max_retries:
+                    break
                 await asyncio.sleep(backoff)
                 backoff *= _BLE_WRITE_RETRY_BACKOFF_MULTIPLIER
 

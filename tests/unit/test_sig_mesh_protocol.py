@@ -29,6 +29,7 @@ from tuya_ble_mesh.sig_mesh_protocol import (
     decrypt_network_pdu,
     encrypt_network_pdu,
     format_status_response,
+    generic_level_set,
     generic_onoff_get,
     generic_onoff_set,
     make_access_segmented,
@@ -353,6 +354,18 @@ class TestGenericOnOff:
         assert result == b"\x82\x01"
 
 
+class TestGenericLevel:
+    """Test Generic Level model messages."""
+
+    def test_level_set_maximum(self) -> None:
+        result = generic_level_set(level=32767, tid=7)
+        assert result == b"\x82\x06\xff\x7f\x07"
+
+    def test_level_set_rejects_out_of_range(self) -> None:
+        with pytest.raises(ProtocolError, match=r"-32768\.\.32767"):
+            generic_level_set(level=32768)
+
+
 # ============================================================
 # Access Layer Opcode Parsing
 # ============================================================
@@ -421,6 +434,10 @@ class TestFormatStatusResponse:
         result = format_status_response(0x8204, b"\x00\x01\x05")
         assert "target=ON" in result
         assert "remaining=5" in result
+
+    def test_level_status(self) -> None:
+        result = format_status_response(0x8208, b"\x00\x40")
+        assert "16384" in result
 
     def test_composition_data(self) -> None:
         result = format_status_response(0x02, b"\x00" + b"\x42" * 10)

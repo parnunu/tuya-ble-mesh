@@ -46,3 +46,29 @@ def test_sig_light_direct_adapter_bypasses_ha_bluetooth_callbacks() -> None:
     assert kwargs["adapter"] == "hci0"
     assert kwargs["ble_device_callback"] is None
     assert kwargs["ble_connect_callback"] is None
+
+
+def test_sig_light_direct_adapter_constructs_real_device() -> None:
+    """The real SIGMeshDevice constructor must accept factory callback wiring."""
+    data = {
+        CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
+        CONF_ADAPTER: "hci0",
+        CONF_NET_KEY: "00112233445566778899aabbccddeeff",  # pragma: allowlist secret
+        CONF_DEV_KEY: "ffeeddccbbaa99887766554433221100",  # pragma: allowlist secret
+        CONF_APP_KEY: "aabbccddeeff00112233445566778899",  # pragma: allowlist secret
+        CONF_UNICAST_TARGET: "00B0",
+        CONF_UNICAST_OUR: "0001",
+        CONF_IV_INDEX: 0,
+        "initial_sequence": 41,
+    }
+
+    device = create_device(
+        DEVICE_TYPE_SIG_LIGHT,
+        "02:00:00:00:00:01",
+        data,
+        MagicMock(),
+        MagicMock(),
+    )
+
+    assert device.address == "02:00:00:00:00:01"
+    assert device.get_seq() == 41

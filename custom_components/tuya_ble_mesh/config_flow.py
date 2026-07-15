@@ -362,7 +362,7 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
                 {
                     DEVICE_TYPE_LIGHT: "LED Light",
                     DEVICE_TYPE_PLUG: "Smart Plug",
-                    DEVICE_TYPE_SIG_LIGHT: "Existing SIG Mesh Light (On/Off)",
+                    DEVICE_TYPE_SIG_LIGHT: "Existing SIG Mesh Light (On/Off + Brightness)",
                     DEVICE_TYPE_SIG_PLUG: "Smart Plug (SIG Mesh)",
                     DEVICE_TYPE_TELINK_BRIDGE_LIGHT: "LED Light (via bridge)",
                 }

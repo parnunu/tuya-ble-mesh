@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -26,7 +26,11 @@ from tuya_ble_mesh.exceptions import (  # noqa: E402  # noqa: E402
     SIGMeshKeyError,
 )
 from tuya_ble_mesh.sig_mesh_device import SIGMeshDevice  # noqa: E402
-from tuya_ble_mesh.sig_mesh_protocol import MeshKeys  # noqa: E402
+from tuya_ble_mesh.sig_mesh_protocol import (  # noqa: E402
+    MeshKeys,
+    generic_level_set,
+    generic_onoff_set,
+)
 
 
 def _make_device() -> SIGMeshDevice:
@@ -137,6 +141,23 @@ class TestSendPowerRetry:
         assert call_count == 2
 
     @pytest.mark.asyncio
+    async def test_retry_reuses_same_transaction_id(self) -> None:
+        dev = _make_device()
+        dev._tid = 23
+        client = dev._client
+        assert client is not None
+        client.write_gatt_char.side_effect = [OSError("transient"), None]
+
+        with patch(
+            "tuya_ble_mesh.sig_mesh_device_commands.generic_onoff_set",
+            wraps=generic_onoff_set,
+        ) as encode:
+            await dev.send_power(True, max_retries=2)
+
+        assert encode.call_args_list == [call(True, 23), call(True, 23)]
+        assert dev._tid == 24
+
+    @pytest.mark.asyncio
     async def test_oserror_also_retried(self) -> None:
         """OSError (not BleakError) should also trigger retry."""
         dev = _make_device()
@@ -178,6 +199,41 @@ class TestSendPowerRetry:
 
         # 3 retries: sleep after attempt 1 and attempt 2 (not after last)
         assert mock_sleep.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# send_level — Generic Level transport
+# ---------------------------------------------------------------------------
+
+
+class TestSendLevel:
+    """Test Generic Level command transport."""
+
+    @pytest.mark.asyncio
+    async def test_writes_one_proxy_packet(self) -> None:
+        dev = _make_device()
+
+        await dev.send_level(0)
+
+        dev._client.write_gatt_char.assert_awaited_once()
+
+
+    @pytest.mark.asyncio
+    async def test_retry_reuses_same_transaction_id(self) -> None:
+        dev = _make_device()
+        dev._tid = 23
+        client = dev._client
+        assert client is not None
+        client.write_gatt_char.side_effect = [OSError("transient"), None]
+
+        with patch(
+            "tuya_ble_mesh.sig_mesh_device_commands.generic_level_set",
+            wraps=generic_level_set,
+        ) as encode:
+            await dev.send_level(1024, max_retries=2)
+
+        assert encode.call_args_list == [call(1024, 23), call(1024, 23)]
+        assert dev._tid == 24
 
 
 # ---------------------------------------------------------------------------

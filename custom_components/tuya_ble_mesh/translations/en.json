@@ -53,7 +53,7 @@
       },
       "sig_light": {
         "title": "Import {name}",
-        "description": "Enter the keys and addresses from the existing SIG Mesh network. Keys are stored in Home Assistant's protected config-entry storage and are never sent to a cloud service.",
+        "description": "Enter the keys and addresses from the existing SIG Mesh network. Keys are stored in Home Assistant's local config-entry storage, which is not encrypted; protect your config directory and backups. Keys are never sent to a cloud service.",
         "data": {
           "net_key": "Network key",
           "dev_key": "Device key",

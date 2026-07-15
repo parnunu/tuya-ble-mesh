@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?logo=homeassistantcommunitystore)](https://github.com/hacs/integration)
 [![CI](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.39.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.39.2-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![HA 2024.1+](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/parnunu/tuya-ble-mesh/actions)
@@ -135,8 +135,9 @@ The integration will scan for nearby BLE Mesh devices automatically. Select your
 For an already-provisioned SIG Mesh lamp, select **Existing SIG Mesh Light
 (On/Off)** and enter its 32-hex-character NetKey, DevKey, AppKey, device and
 controller unicast addresses, IV index, and dedicated BlueZ adapter (normally
-`hci0`). These credentials remain in Home Assistant's protected config-entry
-storage and are not sent to a cloud service.
+`hci0`). These credentials remain in Home Assistant's local config-entry
+storage, which is not encrypted. Protect the HA config directory and backups.
+The credentials are not sent to a cloud service.
 
 ### Bridge Daemon
 

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.39.2] — 2026-07-15
+
+### Security documentation
+- Clarify that SIG Mesh keys are stored locally in Home Assistant config-entry
+  storage, which is filesystem-protected but not encrypted. HA configuration
+  backups must be protected accordingly.
+
+---
+
 ## [0.39.1] — 2026-07-15
 
 ### Added

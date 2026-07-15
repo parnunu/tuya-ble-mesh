@@ -17,9 +17,11 @@ PLATFORMS: list[Platform] = [
 
 # Config entry data keys
 CONF_DEVICE_TYPE = "device_type"
+CONF_ADAPTER = "adapter"
 DEVICE_TYPE_LIGHT = "light"
 DEVICE_TYPE_PLUG = "plug"
 DEVICE_TYPE_SIG_PLUG = "sig_plug"
+DEVICE_TYPE_SIG_LIGHT = "sig_light"
 CONF_MESH_NAME = "mesh_name"
 CONF_MESH_PASSWORD = "mesh_password"  # pragma: allowlist secret
 CONF_MAC_ADDRESS = "mac_address"
@@ -49,13 +51,14 @@ DEVICE_TYPE_SIG_BRIDGE_PLUG = "sig_bridge_plug"
 DEVICE_TYPE_TELINK_BRIDGE_LIGHT = "telink_bridge_light"
 
 PLUG_DEVICE_TYPES = {DEVICE_TYPE_PLUG, DEVICE_TYPE_SIG_PLUG, DEVICE_TYPE_SIG_BRIDGE_PLUG}
-LIGHT_DEVICE_TYPES = {DEVICE_TYPE_LIGHT, DEVICE_TYPE_TELINK_BRIDGE_LIGHT}
+LIGHT_DEVICE_TYPES = {DEVICE_TYPE_LIGHT, DEVICE_TYPE_SIG_LIGHT, DEVICE_TYPE_TELINK_BRIDGE_LIGHT}
 
 # Human-readable model names shown in the HA device registry
 DEVICE_MODEL_NAMES: dict[str, str] = {
     DEVICE_TYPE_LIGHT: "LED Light",
     DEVICE_TYPE_PLUG: "Smart Plug",
     DEVICE_TYPE_SIG_PLUG: "Smart Plug",
+    DEVICE_TYPE_SIG_LIGHT: "SIG Mesh Light",
     DEVICE_TYPE_SIG_BRIDGE_PLUG: "Smart Plug (Bridge)",
     DEVICE_TYPE_TELINK_BRIDGE_LIGHT: "LED Light (Bridge)",
 }

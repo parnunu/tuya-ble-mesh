@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.39.1] — 2026-07-15
+
+### Added
+- **Existing SIG Mesh Light (On/Off)** config-flow/import path for devices that
+  are already provisioned and therefore advertise Proxy Service `0x1828`.
+- **Direct BlueZ adapter ownership** option for installations using a dedicated
+  local adapter rather than Home Assistant's Bluetooth scanner registry.
+- Native on/off-only `light` entity backed by acknowledged Generic OnOff commands.
+
+### Fixed
+- Resolve duplicate `0x2ADD`/`0x2ADE` Proxy Data In/Out characteristic UUIDs by
+  selecting the correct characteristic handles from the Proxy Service.
+
+---
+
 ## [0.38.0] — 2026-03-31
 
 ### Removed

@@ -18,6 +18,7 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
     _validate_unicast_address,
 )
 from custom_components.tuya_ble_mesh.const import (
+    CONF_ADAPTER,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
     CONF_DEVICE_TYPE,
@@ -29,6 +30,7 @@ from custom_components.tuya_ble_mesh.const import (
     DEFAULT_IV_INDEX,
     DEVICE_TYPE_LIGHT,
     DEVICE_TYPE_SIG_BRIDGE_PLUG,
+    DEVICE_TYPE_SIG_LIGHT,
     DEVICE_TYPE_SIG_PLUG,
     DEVICE_TYPE_TELINK_BRIDGE_LIGHT,
 )
@@ -70,7 +72,7 @@ async def async_step_reconfigure(flow: Any, user_input: dict[str, Any] | None = 
                 errors[CONF_BRIDGE_HOST] = host_error
             elif not await _test_bridge_with_session(flow.hass, host, port):
                 errors["base"] = "cannot_connect"
-        elif device_type == DEVICE_TYPE_SIG_PLUG:
+        elif device_type in (DEVICE_TYPE_SIG_PLUG, DEVICE_TYPE_SIG_LIGHT):
             unicast_val = str(user_input.get(CONF_UNICAST_TARGET, "00B0"))
             unicast_error = _validate_unicast_address(unicast_val)
             if unicast_error:
@@ -110,9 +112,8 @@ async def async_step_reconfigure(flow: Any, user_input: dict[str, Any] | None = 
                 ): int,
             }
         )
-    elif device_type == DEVICE_TYPE_SIG_PLUG:
-        schema = vol.Schema(
-            {
+    elif device_type in (DEVICE_TYPE_SIG_PLUG, DEVICE_TYPE_SIG_LIGHT):
+        schema_dict: dict[object, object] = {
                 vol.Optional(
                     CONF_UNICAST_TARGET,
                     default=entry.data.get(CONF_UNICAST_TARGET, "00B0"),
@@ -121,8 +122,12 @@ async def async_step_reconfigure(flow: Any, user_input: dict[str, Any] | None = 
                     CONF_IV_INDEX,
                     default=entry.data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX),
                 ): int,
-            }
-        )
+        }
+        if device_type == DEVICE_TYPE_SIG_LIGHT:
+            schema_dict[
+                vol.Optional(CONF_ADAPTER, default=entry.data.get(CONF_ADAPTER, "hci0"))
+            ] = str
+        schema = vol.Schema(schema_dict)
     else:
         schema = vol.Schema(
             {

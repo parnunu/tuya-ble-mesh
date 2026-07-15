@@ -1,6 +1,6 @@
 [project]
 name = "tuya-ble-mesh"
-version = "0.25.21"
+version = "0.39.1"
 requires-python = ">=3.11"
 dependencies = [
     "bleak>=0.21",

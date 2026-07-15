@@ -56,6 +56,9 @@ from custom_components.tuya_ble_mesh.config_flow_sig import (
     async_step_sig_bridge as sig_bridge_handler,
 )
 from custom_components.tuya_ble_mesh.config_flow_sig import (
+    async_step_sig_light as sig_light_handler,
+)
+from custom_components.tuya_ble_mesh.config_flow_sig import (
     async_step_sig_plug as sig_plug_handler,
 )
 from custom_components.tuya_ble_mesh.config_flow_telink import (
@@ -67,6 +70,7 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
     _validate_vendor_id,
 )
 from custom_components.tuya_ble_mesh.const import (
+    CONF_ADAPTER,
     CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
@@ -86,6 +90,7 @@ from custom_components.tuya_ble_mesh.const import (
     DEVICE_TYPE_LIGHT,
     DEVICE_TYPE_PLUG,
     DEVICE_TYPE_SIG_BRIDGE_PLUG,
+    DEVICE_TYPE_SIG_LIGHT,
     DEVICE_TYPE_SIG_PLUG,
     DEVICE_TYPE_TELINK_BRIDGE_LIGHT,
     DOMAIN,
@@ -155,6 +160,7 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
                 DEVICE_TYPE_LIGHT: "LED Light",
                 DEVICE_TYPE_PLUG: "Smart Plug",
                 DEVICE_TYPE_SIG_PLUG: "Smart Plug",
+                DEVICE_TYPE_SIG_LIGHT: "SIG Mesh Light",
                 DEVICE_TYPE_SIG_BRIDGE_PLUG: "Smart Plug",
                 DEVICE_TYPE_TELINK_BRIDGE_LIGHT: "LED Light",
             }.get(device_type, "Smart Device")
@@ -172,6 +178,7 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
             "net_key": CONF_NET_KEY,
             "dev_key": CONF_DEV_KEY,
             "app_key": CONF_APP_KEY,
+            "adapter": CONF_ADAPTER,
             "bridge_host": CONF_BRIDGE_HOST,
             "bridge_port": CONF_BRIDGE_PORT,
         }
@@ -199,6 +206,21 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
     async def async_step_sig_plug(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Delegate SIG Mesh plug provisioning to SIG handler."""
         return await sig_plug_handler(self, user_input)
+
+    async def async_step_sig_light(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Delegate existing SIG Mesh light setup to SIG handler."""
+        return await sig_light_handler(self, user_input)
+
+    async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
+        """Import an already provisioned SIG Mesh light."""
+        mac = str(user_input.get(CONF_MAC_ADDRESS, "")).upper()
+        if _validate_mac(mac) or user_input.get(CONF_DEVICE_TYPE) != DEVICE_TYPE_SIG_LIGHT:
+            return self.async_abort(reason="invalid_import")
+        self._discovery_info = {
+            "address": mac,
+            "name": str(user_input.get("name") or f"SIG Mesh Light {mac[-8:]}")
+        }
+        return await self.async_step_sig_light(user_input)
 
     async def async_step_sig_bridge(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Delegate SIG bridge config to SIG handler."""
@@ -288,6 +310,14 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
                     }
                     return await self.async_step_telink_bridge(None)
 
+                # Existing provisioned SIG Mesh light: import network keys.
+                if device_type == DEVICE_TYPE_SIG_LIGHT:
+                    self._discovery_info = {
+                        "address": mac.upper(),
+                        "name": f"SIG Mesh Light {mac[-8:]}",
+                    }
+                    return await self.async_step_sig_light(None)
+
                 # SIG Mesh plug: use existing provisioning flow
                 if device_type == DEVICE_TYPE_SIG_PLUG:
                     self._discovery_info = {
@@ -332,6 +362,7 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
                 {
                     DEVICE_TYPE_LIGHT: "LED Light",
                     DEVICE_TYPE_PLUG: "Smart Plug",
+                    DEVICE_TYPE_SIG_LIGHT: "Existing SIG Mesh Light (On/Off)",
                     DEVICE_TYPE_SIG_PLUG: "Smart Plug (SIG Mesh)",
                     DEVICE_TYPE_TELINK_BRIDGE_LIGHT: "LED Light (via bridge)",
                 }

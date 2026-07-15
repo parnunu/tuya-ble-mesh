@@ -175,6 +175,12 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
         self._adapter = adapter
 
         self._client: BleakClient | None = None
+        # Keep UUID fallbacks for mocked/legacy Bleak clients. Real clients
+        # resolve these to characteristic objects from service 0x1828 so
+        # devices that duplicate 0x2ADD/0x2ADE under vendor services remain
+        # unambiguous.
+        self._proxy_data_in: Any = SIG_MESH_PROXY_DATA_IN
+        self._proxy_data_out: Any = SIG_MESH_PROXY_DATA_OUT
         self._keys: MeshKeys | None = None
         self._seq_store: SeqStore = seq_store if seq_store is not None else InMemorySeqStore()
         self._seq_lock = asyncio.Lock()
@@ -279,6 +285,34 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
         """Remove a previously registered disconnect callback."""
         self._disconnect_callbacks.remove(callback)
 
+    def _resolve_proxy_characteristics(self, client: BleakClient) -> None:
+        """Resolve Mesh Proxy characteristics specifically under service 0x1828.
+
+        Some Tuya controllers expose a second 0x2ADD/0x2ADE pair below a
+        vendor-specific service. Passing only the UUID to Bleak is ambiguous
+        on those devices, so retain the concrete characteristic objects.
+        """
+        services = getattr(client, "services", None)
+        get_service = getattr(services, "get_service", None)
+        if not callable(get_service):
+            return
+
+        proxy_service = get_service(SIG_MESH_PROXY_SERVICE)
+        if proxy_service is None:
+            raise MeshConnectionError("Mesh Proxy service 0x1828 not found")
+        # Unit-test mocks do not expose a real service UUID; preserve the UUID
+        # fallback there instead of manufacturing MagicMock characteristics.
+        if not isinstance(getattr(proxy_service, "uuid", None), str):
+            return
+
+        proxy_service_any: Any = proxy_service
+        data_in = proxy_service_any.get_characteristic(SIG_MESH_PROXY_DATA_IN)
+        data_out = proxy_service_any.get_characteristic(SIG_MESH_PROXY_DATA_OUT)
+        if data_in is None or data_out is None:
+            raise MeshConnectionError("Mesh Proxy Data In/Out characteristics not found")
+        self._proxy_data_in = data_in
+        self._proxy_data_out = data_out
+
     async def connect(
         self,
         timeout: float = DEFAULT_CONNECTION_TIMEOUT,
@@ -333,9 +367,11 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                     client = BleakClient(device, **client_kwargs)
                     await client.connect()
 
+                    self._resolve_proxy_characteristics(client)
+
                     # Subscribe to Proxy Data Out notifications
                     try:
-                        await client.start_notify(SIG_MESH_PROXY_DATA_OUT, self._on_notify)
+                        await client.start_notify(self._proxy_data_out, self._on_notify)
                     except (EOFError, BleakError, BleakDBusError, OSError) as notify_exc:
                         _LOGGER.warning(
                             "Notification subscription failed for %s: %s (%s) — "
@@ -378,7 +414,7 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
         if self._client is not None:
             # HF-1: Suppress only expected BLE exceptions, not all exceptions
             with contextlib.suppress(BleakError, OSError):
-                await self._client.stop_notify(SIG_MESH_PROXY_DATA_OUT)
+                await self._client.stop_notify(self._proxy_data_out)
             with contextlib.suppress(BleakError, OSError):
                 await self._client.disconnect()
             self._client = None

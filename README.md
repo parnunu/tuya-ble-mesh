@@ -1,13 +1,16 @@
 # Tuya BLE Mesh for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?logo=homeassistantcommunitystore)](https://github.com/hacs/integration)
-[![CI](https://github.com/11z4t/tuya-ble-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/11z4t/tuya-ble-mesh/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.35.0-blue.svg)](CHANGELOG.md)
+[![CI](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.39.1-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![HA 2024.1+](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
-[![Tests](https://img.shields.io/badge/tests-1922%20passing-brightgreen.svg)](https://github.com/11z4t/tuya-ble-mesh/actions)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/parnunu/tuya-ble-mesh/actions)
 
 A fully local Home Assistant integration for controlling Tuya BLE Mesh devices. No cloud. No Tuya account required for daily use.
+
+This fork adds HACS-packaged direct control for already-provisioned SIG Mesh
+Generic On/Off lights using a dedicated local BlueZ adapter.
 
 ## What is this?
 
@@ -33,7 +36,16 @@ Home Assistant  ←API→  ESPHome BLE Proxy  ←BLE Mesh→  Devices
 ```
 For SIG Mesh devices, any ESPHome device with BLE proxy enabled can be used instead of a dedicated RPi. This is simpler to set up and doesn't require a separate bridge daemon.
 
-In both modes, Home Assistant itself doesn't need Bluetooth hardware.
+**Mode 3: Direct local BlueZ adapter (existing SIG Mesh lights)**
+```
+Home Assistant custom integration  ←BlueZ/hci0→  SIG Mesh Light
+```
+Already-provisioned Generic On/Off lights can be imported with their NetKey,
+DevKey, AppKey, unicast addresses, and IV index. The selected adapter is owned
+directly by this integration; do not let another process own the same adapter.
+
+Bridge and proxy modes do not require Bluetooth hardware on Home Assistant.
+Direct mode requires a dedicated local BlueZ adapter.
 
 ## Tested Devices
 
@@ -41,6 +53,7 @@ In both modes, Home Assistant itself doesn't need Bluetooth hardware.
 |--------|-------|------|--------|
 | LED Driver 9952126 | Malmbergs | Dimmable LED driver | ✅ Tested — on/off, brightness |
 | Smart Plug S17 | Malmbergs | BLE Mesh relay plug | ✅ Tested — on/off, SIG Mesh provisioned |
+| Generic SIG Mesh light | Tuya-compatible | SIG Mesh Generic On/Off light | ✅ Tested — direct local BLE on/off |
 
 ### Potentially Compatible
 
@@ -64,6 +77,7 @@ Devices using the Tuya BLE Mesh / Telink stack with service UUID `fe07`:
 ### Connectivity
 - **Auto-discovery** — finds `out_of_mesh*` and `tymesh*` devices via BLE
 - **HA Bluetooth integration** — uses Home Assistant's native Bluetooth API (no adapter conflicts)
+- **Dedicated local adapter mode** — direct BlueZ ownership for imported SIG Mesh lights
 - **ESPHome BLE proxy** — use any ESPHome device as a BLE bridge (SIG Mesh)
 - **Auto-reconnect** — exponential backoff (5s → 5min) on connection loss
 - **Keep-alive** — maintains BLE connections proactively to minimize latency
@@ -90,7 +104,7 @@ Devices using the Tuya BLE Mesh / Telink stack with service UUID `fe07`:
 
 1. Open **HACS** in Home Assistant
 2. Go to **Integrations** → three-dot menu → **Custom repositories**
-3. Add URL: `https://github.com/11z4t/tuya-ble-mesh`
+3. Add URL: `https://github.com/parnunu/tuya-ble-mesh`
 4. Category: **Integration**
 5. Search for **"Tuya BLE Mesh"** and click **Download**
 6. **Restart Home Assistant**
@@ -117,6 +131,12 @@ The integration will scan for nearby BLE Mesh devices automatically. Select your
 | Mesh Name | Mesh network name | `out_of_mesh` |
 | Mesh Password | Mesh network password | `123456` |
 | Vendor ID | Vendor identifier (hex) | `0x1001` |
+
+For an already-provisioned SIG Mesh lamp, select **Existing SIG Mesh Light
+(On/Off)** and enter its 32-hex-character NetKey, DevKey, AppKey, device and
+controller unicast addresses, IV index, and dedicated BlueZ adapter (normally
+`hci0`). These credentials remain in Home Assistant's protected config-entry
+storage and are not sent to a cloud service.
 
 ### Bridge Daemon
 

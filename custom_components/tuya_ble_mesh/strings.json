@@ -51,6 +51,28 @@
         "description": "We'll automatically set up the secure connection to your device.\n\nMake sure the device is **powered on** and **close to your Bluetooth adapter**, then click **Submit**.",
         "data": {}
       },
+      "sig_light": {
+        "title": "Import {name}",
+        "description": "Enter the keys and addresses from the existing SIG Mesh network. Keys are stored in Home Assistant's protected config-entry storage and are never sent to a cloud service.",
+        "data": {
+          "net_key": "Network key",
+          "dev_key": "Device key",
+          "app_key": "Application key",
+          "unicast_target": "Device unicast address",
+          "unicast_our": "Controller unicast address",
+          "iv_index": "IV index",
+          "adapter": "Bluetooth adapter"
+        },
+        "data_description": {
+          "net_key": "32 hexadecimal characters.",
+          "dev_key": "32 hexadecimal characters.",
+          "app_key": "32 hexadecimal characters.",
+          "unicast_target": "Four hexadecimal characters, normally 00B0.",
+          "unicast_our": "Four hexadecimal characters, normally 0001.",
+          "iv_index": "The current SIG Mesh IV index.",
+          "adapter": "Local BlueZ adapter to own directly, normally hci0."
+        }
+      },
       "confirm": {
         "title": "Add {name}",
         "description": "**Signal:** {signal_quality}\n\nSelect the device type below to finish setup.",
@@ -80,7 +102,8 @@
           "bridge_host": "Device Address",
           "bridge_port": "Device Port",
           "unicast_target": "Device ID",
-          "iv_index": "Security Counter"
+          "iv_index": "Security Counter",
+          "adapter": "Bluetooth adapter"
         },
         "data_description": {
           "mesh_name": "The network name your device is paired to.",
@@ -120,7 +143,8 @@
       "device_not_available": "Device is no longer nearby. Try adding it again when it's in range.",
       "reconfigure_successful": "Settings updated. The integration will restart now.",
       "entry_not_found": "Integration entry not found.",
-      "not_in_pairing_mode": "Device is not in pairing mode. Reset the device to pairing mode and try again."
+      "not_in_pairing_mode": "Device is not in pairing mode. Reset the device to pairing mode and try again.",
+      "invalid_import": "The imported SIG Mesh light data is invalid."
     }
   },
   "options": {
@@ -135,7 +159,8 @@
           "bridge_host": "Device Address",
           "bridge_port": "Device Port",
           "unicast_target": "Device ID",
-          "iv_index": "Security Counter"
+          "iv_index": "Security Counter",
+          "adapter": "Bluetooth adapter"
         },
         "data_description": {
           "mesh_name": "The network name for your device.",

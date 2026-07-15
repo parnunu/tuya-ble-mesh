@@ -23,6 +23,7 @@ from custom_components.tuya_ble_mesh.coordinator import (  # noqa: E402
 from custom_components.tuya_ble_mesh.light import (  # noqa: E402
     _COMMAND_DEBOUNCE_INTERVAL,
     TuyaBLEMeshLight,
+    TuyaSIGMeshOnOffLight,
     _build_turn_on_command,
     async_setup_entry,
     brightness_to_device,
@@ -489,6 +490,53 @@ class TestLightPlatformSetup:
         await async_setup_entry(hass, entry, add_entities)
 
         add_entities.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_setup_creates_onoff_light_for_sig_light(self) -> None:
+        """Existing SIG Mesh lights expose a light, not an outlet switch."""
+        coord = make_mock_coordinator(is_on=False)
+        entry = MagicMock()
+        entry.entry_id = "entry1"
+        entry.runtime_data.coordinator = coord
+        entry.runtime_data.device_info = MagicMock()
+        entry.data = {"device_type": "sig_light"}
+        add_entities = MagicMock()
+
+        await async_setup_entry(MagicMock(), entry, add_entities)
+
+        entities = add_entities.call_args.args[0]
+        assert len(entities) == 1
+        assert isinstance(entities[0], TuyaSIGMeshOnOffLight)
+
+
+@pytest.mark.requires_ha
+class TestSIGMeshOnOffLight:
+    """Test on/off-only light semantics for provisioned SIG Mesh lamps."""
+
+    def test_exposes_only_onoff_color_mode(self) -> None:
+        light = TuyaSIGMeshOnOffLight(make_mock_coordinator(), "entry1")
+
+        assert light.supported_color_modes == {ColorMode.ONOFF}
+        assert light.color_mode == ColorMode.ONOFF
+        assert light.supported_features == 0
+
+    @pytest.mark.asyncio
+    async def test_turn_off_uses_acknowledged_retry_path(self) -> None:
+        coord = make_mock_coordinator(is_on=True)
+        light = TuyaSIGMeshOnOffLight(coord, "entry1")
+
+        await light.async_turn_off()
+
+        coord.device.send_power.assert_awaited_once_with(False)
+
+    @pytest.mark.asyncio
+    async def test_turn_on_uses_acknowledged_retry_path(self) -> None:
+        coord = make_mock_coordinator(is_on=False)
+        light = TuyaSIGMeshOnOffLight(coord, "entry1")
+
+        await light.async_turn_on()
+
+        coord.device.send_power.assert_awaited_once_with(True)
 
 
 @pytest.mark.requires_ha

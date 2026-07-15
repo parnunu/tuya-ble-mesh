@@ -32,6 +32,7 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
     _validate_vendor_id,
 )
 from custom_components.tuya_ble_mesh.const import (
+    CONF_ADAPTER,
     CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
@@ -49,6 +50,7 @@ from custom_components.tuya_ble_mesh.const import (
     DEVICE_TYPE_LIGHT,
     DEVICE_TYPE_PLUG,
     DEVICE_TYPE_SIG_BRIDGE_PLUG,
+    DEVICE_TYPE_SIG_LIGHT,
     DEVICE_TYPE_SIG_PLUG,
     DEVICE_TYPE_TELINK_BRIDGE_LIGHT,
     DOMAIN,
@@ -470,6 +472,72 @@ class TestSIGPlugStep:
 
         assert result["type"] == "form"
         assert result["step_id"] == "sig_plug"
+
+
+@pytest.mark.requires_ha
+class TestExistingSIGLightStep:
+    """Test importing an already provisioned SIG Mesh lamp."""
+
+    @pytest.mark.asyncio
+    async def test_user_step_branches_to_existing_sig_light(self) -> None:
+        flow = _make_flow()
+
+        result = await flow.async_step_user(
+            {
+                CONF_MAC_ADDRESS: "02:00:00:00:00:01",
+                CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
+            }
+        )
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "sig_light"
+
+    @pytest.mark.asyncio
+    async def test_sig_light_step_creates_keyed_entry(self) -> None:
+        flow = _make_flow()
+        flow._discovery_info = {
+            "address": "02:00:00:00:00:01",
+            "name": "Existing SIG Mesh Light",
+        }
+
+        result = await flow.async_step_sig_light(
+            {
+                CONF_NET_KEY: _TEST_NET_KEY,
+                CONF_DEV_KEY: _TEST_DEV_KEY,
+                CONF_APP_KEY: _TEST_APP_KEY,
+                CONF_UNICAST_TARGET: "00B0",
+                CONF_UNICAST_OUR: "0001",
+                CONF_IV_INDEX: 0,
+                CONF_ADAPTER: "hci0",
+            }
+        )
+
+        assert result["type"] == "create_entry"
+        assert result["data"][CONF_DEVICE_TYPE] == DEVICE_TYPE_SIG_LIGHT
+        assert result["data"][CONF_MAC_ADDRESS] == "02:00:00:00:00:01"
+        assert result["data"][CONF_ADAPTER] == "hci0"
+        assert result["data"][CONF_NET_KEY] == _TEST_NET_KEY
+
+    @pytest.mark.asyncio
+    async def test_import_creates_existing_sig_light_entry(self) -> None:
+        flow = _make_flow()
+        flow.context = {"source": "import"}
+        import_data = {
+            CONF_MAC_ADDRESS: "02:00:00:00:00:01",
+            CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
+            CONF_NET_KEY: _TEST_NET_KEY,
+            CONF_DEV_KEY: _TEST_DEV_KEY,
+            CONF_APP_KEY: _TEST_APP_KEY,
+            CONF_UNICAST_TARGET: "00B0",
+            CONF_UNICAST_OUR: "0001",
+            CONF_IV_INDEX: 0,
+            CONF_ADAPTER: "hci0",
+        }
+
+        result = await flow.async_step_import(import_data)
+
+        assert result["type"] == "create_entry"
+        assert result["data"] == import_data
 
 
 @pytest.mark.requires_ha

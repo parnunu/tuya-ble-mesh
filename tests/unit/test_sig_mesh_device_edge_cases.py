@@ -137,6 +137,35 @@ class TestConnectEdgeCases:
         assert mock_cls.call_args.kwargs.get("adapter") == "hci1"
 
     @pytest.mark.asyncio
+    async def test_connect_resolves_duplicate_proxy_characteristics_from_1828(self) -> None:
+        """Select concrete 0x2ADD/0x2ADE handles from the Mesh Proxy service."""
+        dev = _dev()
+        client = _mock_client()
+        proxy_service = MagicMock()
+        proxy_service.uuid = "00001828-0000-1000-8000-00805f9b34fb"
+        data_in = MagicMock(name="mesh_proxy_data_in")
+        data_out = MagicMock(name="mesh_proxy_data_out")
+        proxy_service.get_characteristic.side_effect = (
+            lambda uuid: data_in if uuid.endswith("2add-0000-1000-8000-00805f9b34fb") else data_out
+        )
+        client.services.get_service.return_value = proxy_service
+
+        with (
+            patch("tuya_ble_mesh.sig_mesh_device.BleakScanner") as mock_scanner,
+            patch("tuya_ble_mesh.sig_mesh_device.BleakClient", return_value=client),
+            patch.object(dev, "request_composition_data", new_callable=AsyncMock),
+        ):
+            mock_scanner.find_device_by_address = AsyncMock(return_value=MagicMock())
+            await dev.connect(max_retries=1)
+
+        client.services.get_service.assert_called_once_with(
+            "00001828-0000-1000-8000-00805f9b34fb"
+        )
+        assert dev._proxy_data_in is data_in
+        assert dev._proxy_data_out is data_out
+        assert client.start_notify.call_args.args[0] is data_out
+
+    @pytest.mark.asyncio
     async def test_connect_device_not_found_raises(self) -> None:
         """Lines 324-325: BleakScanner returns None → MeshConnectionError."""
         dev = _dev()

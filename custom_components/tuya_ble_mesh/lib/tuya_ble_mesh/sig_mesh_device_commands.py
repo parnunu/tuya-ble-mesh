@@ -83,6 +83,7 @@ class SIGMeshDeviceCommandsMixin:
     _correlation_id: int
     _segment_lock: asyncio.Lock
     _pending_responses: dict[tuple[int, int], asyncio.Future[bytes]]
+    _proxy_data_in: Any
 
     async def _next_seq(self) -> int:
         raise NotImplementedError
@@ -151,7 +152,7 @@ class SIGMeshDeviceCommandsMixin:
                 proxy_pdu = make_proxy_pdu(network_pdu)
 
                 await self._client.write_gatt_char(
-                    SIG_MESH_PROXY_DATA_IN, proxy_pdu, response=False
+                    self._proxy_data_in, proxy_pdu, response=False
                 )
                 _LOGGER.info(
                     "GenericOnOff %s sent to 0x%04X (seq=%d, attempt=%d)",
@@ -227,7 +228,7 @@ class SIGMeshDeviceCommandsMixin:
         )
 
         proxy_pdu = make_proxy_pdu(network_pdu)
-        await self._client.write_gatt_char(SIG_MESH_PROXY_DATA_IN, proxy_pdu, response=False)
+        await self._client.write_gatt_char(self._proxy_data_in, proxy_pdu, response=False)
 
         _LOGGER.info(
             "Vendor command sent to 0x%04X (opcode=%s, seq=%d, %d bytes)",
@@ -277,7 +278,7 @@ class SIGMeshDeviceCommandsMixin:
         )
 
         proxy_pdu = make_proxy_pdu(network_pdu)
-        await self._client.write_gatt_char(SIG_MESH_PROXY_DATA_IN, proxy_pdu, response=False)
+        await self._client.write_gatt_char(self._proxy_data_in, proxy_pdu, response=False)
         _LOGGER.info(
             "Composition Data Get sent to 0x%04X (seq=%d)",
             self._target_addr,
@@ -353,7 +354,7 @@ class SIGMeshDeviceCommandsMixin:
                 )
                 proxy_pdu = make_proxy_pdu(network_pdu)
                 await self._client.write_gatt_char(
-                    SIG_MESH_PROXY_DATA_IN, proxy_pdu, response=False
+                    self._proxy_data_in, proxy_pdu, response=False
                 )
                 await asyncio.sleep(STATUS_WAIT_POLL_INTERVAL)
 
@@ -446,7 +447,7 @@ class SIGMeshDeviceCommandsMixin:
             self._pending_responses[resp_key] = future_bind
 
         try:
-            await self._client.write_gatt_char(SIG_MESH_PROXY_DATA_IN, proxy_pdu, response=False)
+            await self._client.write_gatt_char(self._proxy_data_in, proxy_pdu, response=False)
             _LOGGER.info(
                 "Model App Bind sent: element=0x%04X app_idx=%d model=0x%04X (seq=%d)",
                 element_addr,

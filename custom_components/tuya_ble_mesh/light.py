@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.components.light import (
     ATTR_COLOR_TEMP_KELVIN,
@@ -22,6 +22,7 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from custom_components.tuya_ble_mesh.const import (
@@ -30,6 +31,8 @@ from custom_components.tuya_ble_mesh.const import (
     DEVICE_BRIGHTNESS_MIN,
     DEVICE_COLOR_TEMP_MAX,
     DEVICE_COLOR_TEMP_MIN,
+    DEVICE_TYPE_SIG_LIGHT,
+    DOMAIN,
     HA_BRIGHTNESS_MAX,
     HA_BRIGHTNESS_MIN,
     HA_MIRED_MAX,
@@ -251,12 +254,67 @@ async def async_setup_entry(
         entry: Config entry being set up.
         async_add_entities: Callback to register new entities.
     """
-    if entry.data.get(CONF_DEVICE_TYPE) in PLUG_DEVICE_TYPES:
+    device_type = entry.data.get(CONF_DEVICE_TYPE)
+    if device_type in PLUG_DEVICE_TYPES:
         return
     runtime_data = entry.runtime_data
     coordinator: TuyaBLEMeshCoordinator = runtime_data.coordinator
     device_info: DeviceInfo = runtime_data.device_info
+    if device_type == DEVICE_TYPE_SIG_LIGHT:
+        async_add_entities([TuyaSIGMeshOnOffLight(coordinator, entry.entry_id, device_info)])
+        return
     async_add_entities([TuyaBLEMeshLight(coordinator, entry.entry_id, device_info)])
+
+
+class TuyaSIGMeshOnOffLight(TuyaBLEMeshEntity, LightEntity):
+    """On/off-only light backed by a provisioned SIG Mesh GenericOnOff server."""
+
+    _attr_should_poll = False
+    _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.ONOFF}
+    _attr_color_mode = ColorMode.ONOFF
+    _attr_supported_features = LightEntityFeature(0)
+    _attr_name = None
+
+    def __init__(
+        self,
+        coordinator: TuyaBLEMeshCoordinator,
+        entry_id: str,
+        device_info: DeviceInfo | None = None,
+    ) -> None:
+        """Initialize the SIG Mesh on/off light."""
+        super().__init__(coordinator, entry_id, device_info)
+        self._attr_unique_id = f"{coordinator.device.address}_light"
+
+    @property
+    def is_on(self) -> bool:
+        """Return the acknowledged on/off state."""
+        return bool(self.coordinator.state.is_on)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the light on through the coordinator retry path."""
+        try:
+            await self.coordinator.send_command_with_retry(
+                lambda: self.coordinator.device.send_power(True),
+                description="send_power(True)",
+            )
+        except (OSError, ConnectionError, TimeoutError) as exc:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="switch_on_failed",
+            ) from exc
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the light off through the coordinator retry path."""
+        try:
+            await self.coordinator.send_command_with_retry(
+                lambda: self.coordinator.device.send_power(False),
+                description="send_power(False)",
+            )
+        except (OSError, ConnectionError, TimeoutError) as exc:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="switch_off_failed",
+            ) from exc
 
 
 class TuyaBLEMeshLight(TuyaBLEMeshEntity, LightEntity):

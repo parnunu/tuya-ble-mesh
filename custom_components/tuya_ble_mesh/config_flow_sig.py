@@ -15,13 +15,25 @@ import voluptuous as vol
 
 if TYPE_CHECKING:
     from homeassistant.data_entry_flow import FlowResult
+from custom_components.tuya_ble_mesh.config_flow_validators import (
+    _validate_hex_key,
+    _validate_iv_index,
+    _validate_unicast_address,
+)
 from custom_components.tuya_ble_mesh.const import (
+    CONF_ADAPTER,
+    CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
+    CONF_DEV_KEY,
+    CONF_IV_INDEX,
+    CONF_NET_KEY,
+    CONF_UNICAST_OUR,
     CONF_UNICAST_TARGET,
     DEFAULT_BRIDGE_PORT,
     DEFAULT_IV_INDEX,
     DEVICE_TYPE_SIG_BRIDGE_PLUG,
+    DEVICE_TYPE_SIG_LIGHT,
     DEVICE_TYPE_SIG_PLUG,
 )
 
@@ -258,6 +270,62 @@ async def async_step_sig_plug(flow: Any, user_input: dict[str, Any] | None) -> F
     return flow.async_show_form(
         step_id="sig_plug",
         data_schema=vol.Schema({}),
+        description_placeholders={
+            "name": (flow._discovery_info.get("name", "") if flow._discovery_info else ""),
+        },
+        errors=errors,
+    )
+
+
+async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> FlowResult:
+    """Import an already provisioned SIG Mesh GenericOnOff light."""
+    errors: dict[str, str] = {}
+    if user_input is not None and flow._discovery_info is not None:
+        for field in (CONF_NET_KEY, CONF_DEV_KEY, CONF_APP_KEY):
+            if not _validate_hex_key(str(user_input.get(field, ""))):
+                errors[field] = "invalid_key"
+
+        for field, default in (
+            (CONF_UNICAST_TARGET, "00B0"),
+            (CONF_UNICAST_OUR, "0001"),
+        ):
+            if error := _validate_unicast_address(str(user_input.get(field, default))):
+                errors[field] = error
+
+        iv_index = user_input.get(CONF_IV_INDEX, DEFAULT_IV_INDEX)
+        if error := _validate_iv_index(iv_index):
+            errors[CONF_IV_INDEX] = error
+
+        if not errors:
+            mac = flow._discovery_info["address"].upper()
+            await flow.async_set_unique_id(mac)
+            flow._abort_if_unique_id_configured()
+            return flow._finalize_entry(
+                mac=mac,
+                device_type=DEVICE_TYPE_SIG_LIGHT,
+                title=flow._discovery_info.get("name") or None,
+                unicast_target=str(user_input.get(CONF_UNICAST_TARGET, "00B0")).upper(),
+                unicast_our=str(user_input.get(CONF_UNICAST_OUR, "0001")).upper(),
+                iv_index=iv_index,
+                net_key=str(user_input[CONF_NET_KEY]),
+                dev_key=str(user_input[CONF_DEV_KEY]),
+                app_key=str(user_input[CONF_APP_KEY]),
+                adapter=str(user_input.get(CONF_ADAPTER, "hci0")),
+            )
+
+    return flow.async_show_form(
+        step_id="sig_light",
+        data_schema=vol.Schema(
+            {
+                vol.Required(CONF_NET_KEY): str,
+                vol.Required(CONF_DEV_KEY): str,
+                vol.Required(CONF_APP_KEY): str,
+                vol.Optional(CONF_UNICAST_TARGET, default="00B0"): str,
+                vol.Optional(CONF_UNICAST_OUR, default="0001"): str,
+                vol.Optional(CONF_IV_INDEX, default=DEFAULT_IV_INDEX): int,
+                vol.Optional(CONF_ADAPTER, default="hci0"): str,
+            }
+        ),
         description_placeholders={
             "name": (flow._discovery_info.get("name", "") if flow._discovery_info else ""),
         },

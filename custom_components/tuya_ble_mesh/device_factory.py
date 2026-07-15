@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any, TypeAlias, Union
 
 from custom_components.tuya_ble_mesh.const import (
+    CONF_ADAPTER,
     CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
@@ -27,6 +28,7 @@ from custom_components.tuya_ble_mesh.const import (
     DEFAULT_MESH_ADDRESS,
     DEFAULT_VENDOR_ID,
     DEVICE_TYPE_SIG_BRIDGE_PLUG,
+    DEVICE_TYPE_SIG_LIGHT,
     DEVICE_TYPE_SIG_PLUG,
     DEVICE_TYPE_TELINK_BRIDGE_LIGHT,
 )
@@ -132,6 +134,12 @@ def _create_sig_plug(
     target_addr = int(data.get(CONF_UNICAST_TARGET, "00B0"), 16)
     our_addr = int(data.get(CONF_UNICAST_OUR, "0001"), 16)
     iv_index: int = data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX)
+    adapter = data.get(CONF_ADAPTER)
+    if adapter:
+        # A direct adapter entry intentionally owns the local BlueZ adapter
+        # instead of depending on HA's Bluetooth scanner registry.
+        ble_device_callback = None
+        ble_connect_callback = None
 
     target_hex = f"{target_addr:04x}"
     op_prefix = "cfg"
@@ -150,6 +158,7 @@ def _create_sig_plug(
         iv_index=iv_index,
         ble_device_callback=ble_device_callback,
         ble_connect_callback=ble_connect_callback,
+        adapter=adapter,
     )
 
 
@@ -194,6 +203,7 @@ _DEVICE_CREATORS: dict[
     DEVICE_TYPE_SIG_BRIDGE_PLUG: _create_sig_bridge_plug,
     DEVICE_TYPE_TELINK_BRIDGE_LIGHT: _create_telink_bridge_light,
     DEVICE_TYPE_SIG_PLUG: _create_sig_plug,
+    DEVICE_TYPE_SIG_LIGHT: _create_sig_plug,
 }
 
 

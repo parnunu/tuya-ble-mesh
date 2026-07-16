@@ -29,6 +29,7 @@ from homeassistant.exceptions import (
 )
 
 from custom_components.tuya_ble_mesh.const import (
+    CONF_ADAPTER,
     CONF_DEVICE_TYPE,
     CONF_MAC_ADDRESS,
     CONF_VENDOR_ID,
@@ -39,6 +40,11 @@ from custom_components.tuya_ble_mesh.const import (
 )
 from custom_components.tuya_ble_mesh.device_factory import create_device
 from custom_components.tuya_ble_mesh.device_registry import TuyaBLEMeshDeviceRegistry
+from custom_components.tuya_ble_mesh.ha_bluetooth import (
+    create_ha_ble_callbacks,
+    register_ha_active_scan,
+)
+from custom_components.tuya_ble_mesh.ha_sequence import get_ha_sequence_store
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -93,20 +99,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) 
 
     mac_address: str = entry.data[CONF_MAC_ADDRESS]
     device_type: str = entry.data.get(CONF_DEVICE_TYPE, "")
+    coordinator: TuyaBLEMeshCoordinator | None = None
+
+    # Register the target before the first connection attempt. Address-specific
+    # ACTIVE callbacks make HA's AUTO-mode ESPHome proxies scan on demand.
+    if not entry.data.get(CONF_ADAPTER):
+
+        def _on_ble_device_found(service_info: Any, change: Any) -> None:
+            if coordinator is not None and not coordinator.state.available:
+                _LOGGER.debug(
+                    "BLE device %s reappeared (RSSI: %s) — triggering reconnect",
+                    service_info.address,
+                    service_info.rssi,
+                )
+                coordinator.schedule_reconnect()
+
+        try:
+            entry.async_on_unload(
+                register_ha_active_scan(hass, mac_address, _on_ble_device_found)
+            )
+            _LOGGER.debug("BLE active-scan callback registered for %s", mac_address)
+        except ImportError:
+            _LOGGER.debug(
+                "Bluetooth integration not available, skipping active-scan callback"
+            )
 
     # BLE Proxy support: use HA's bluetooth stack to find devices
     # This routes through all available BLE adapters and ESPHome proxies
-    # PLAT-737: ALWAYS use connectable=True to signal connection intent
-    def _ble_device_from_ha(address: str) -> Any:
-        from homeassistant.components.bluetooth import async_ble_device_from_address
-
-        # PLAT-737: connectable=True signals HA to pause scanning during connect
-        device = async_ble_device_from_address(hass, address, connectable=True)
-        if device is None:
-            _LOGGER.warning("BLE device %s not found via HA bluetooth stack", address)
-        else:
-            _LOGGER.debug("BLE device %s resolved via HA bluetooth stack", address)
-        return device
+    _ble_device_from_ha, _ble_connect_via_ha = create_ha_ble_callbacks(
+        hass, entry.title
+    )
+    sequence_store = get_ha_sequence_store(hass, entry.data)
 
     # PLAT-739: Gracefully handle missing provisioning keys for SIG Mesh devices
     try:
@@ -115,6 +138,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) 
             mac_address,
             entry.data,
             ble_device_callback=_ble_device_from_ha,
+            ble_connect_callback=_ble_connect_via_ha,
+            seq_store=sequence_store,
         )
     except ValueError as exc:
         _LOGGER.error(
@@ -127,7 +152,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) 
         # User must remove the entry and re-provision the device.
         return False
 
-    coordinator = TuyaBLEMeshCoordinator(device, hass=hass, entry_id=entry.entry_id, entry=entry)
+    coordinator = TuyaBLEMeshCoordinator(
+        device,
+        hass=hass,
+        entry_id=entry.entry_id,
+        entry=entry,
+        sequence_store=sequence_store,
+    )
 
     from homeassistant.helpers.device_registry import DeviceInfo
 
@@ -213,39 +244,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) 
     # Reload entry when options are changed
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    # Register BLE callback for auto-reconnect when configured device reappears
-    try:
-        from homeassistant.components.bluetooth import (
-            BluetoothCallbackMatcher,
-            BluetoothChange,
-            BluetoothServiceInfoBleak,
-            async_register_callback,
-        )
-
-        def _on_ble_device_found(
-            service_info: BluetoothServiceInfoBleak,
-            change: BluetoothChange,
-        ) -> None:
-            if not coordinator.state.available:
-                # PLAT-759: Routine reconnect trigger at DEBUG level
-                _LOGGER.debug(
-                    "BLE device %s reappeared (RSSI: %s) — triggering reconnect",
-                    service_info.address,
-                    service_info.rssi,
-                )
-                coordinator.schedule_reconnect()
-
-        entry.async_on_unload(
-            async_register_callback(
-                hass,
-                _on_ble_device_found,
-                BluetoothCallbackMatcher(address=mac_address),
-                BluetoothChange.ADVERTISEMENT,
-            )
-        )
-        _LOGGER.debug("BLE reconnect callback registered for %s", mac_address)
-    except ImportError:
-        _LOGGER.debug("Bluetooth integration not available, skipping BLE reconnect callback")
 
     # PLAT-759: Routine setup completion at DEBUG level
     _LOGGER.debug("Tuya BLE Mesh entry set up: %s", entry.title)

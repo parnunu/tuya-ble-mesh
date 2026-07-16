@@ -70,6 +70,17 @@ def mock_device_registry() -> Any:
         yield mock_registry
 
 
+@pytest.fixture(autouse=True)
+def mock_ha_bluetooth() -> Any:
+    """Mock HA Bluetooth scan registration while preserving real callbacks."""
+    cancel_callback = MagicMock()
+    with patch(
+        "custom_components.tuya_ble_mesh.register_ha_active_scan",
+        return_value=cancel_callback,
+    ) as register_scan:
+        yield register_scan, cancel_callback
+
+
 def _make_patches() -> tuple[MagicMock, MagicMock]:
     """Create mock MeshDevice and Coordinator classes."""
     mock_device_instance = MagicMock()
@@ -110,7 +121,11 @@ class TestAsyncSetupEntry:
             ble_device_callback=ANY,
         )
         coord_cls.assert_called_once_with(
-            mock_device, hass=hass, entry_id=entry.entry_id, entry=entry
+            mock_device,
+            hass=hass,
+            entry_id=entry.entry_id,
+            entry=entry,
+            sequence_store=None,
         )
 
     @pytest.mark.asyncio
@@ -126,6 +141,32 @@ class TestAsyncSetupEntry:
             await async_setup_entry(hass, entry)
 
         mock_coord.async_initial_connect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_setup_registers_target_scan_before_connect(
+        self, mock_ha_bluetooth: Any
+    ) -> None:
+        """AUTO-mode proxies must be activated before initial connection."""
+        hass = make_mock_hass()
+        entry = make_mock_entry()
+        mock_device, mock_coord = _make_patches()
+        events: list[str] = []
+        register_scan, _cancel = mock_ha_bluetooth
+        register_scan.side_effect = lambda *_args: events.append("scan") or MagicMock()
+
+        async def _connect() -> None:
+            events.append("connect")
+
+        mock_coord.async_initial_connect.side_effect = _connect
+
+        with (
+            patch(_PATCH_MESH_DEVICE, return_value=mock_device),
+            patch(_PATCH_COORDINATOR, return_value=mock_coord),
+        ):
+            await async_setup_entry(hass, entry)
+
+        assert events[:2] == ["scan", "connect"]
+        assert register_scan.call_args.args[1] == "DC:23:4D:21:43:A5"
 
     @pytest.mark.asyncio
     async def test_setup_stores_runtime_data_on_entry(self) -> None:

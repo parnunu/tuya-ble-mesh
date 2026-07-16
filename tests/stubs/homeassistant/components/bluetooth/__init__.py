@@ -3,8 +3,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 from unittest.mock import MagicMock
+
+
+class BluetoothScanningMode(Enum):
+    """Scanning mode supported by HA's Bluetooth manager."""
+
+    PASSIVE = "passive"
+    ACTIVE = "active"
+    AUTO = "auto"
+
+
+class BluetoothCallbackMatcher(dict[str, Any]):
+    """Minimal dict-like matcher used by Bluetooth callbacks."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+
+def async_register_callback(
+    hass: Any,
+    callback: Any,
+    match_dict: BluetoothCallbackMatcher,
+    mode: BluetoothScanningMode,
+    *,
+    scan_interval: float | None = None,
+    scan_duration: float | None = None,
+) -> Any:
+    """Return a cancellation callback for a registered Bluetooth matcher."""
+    return MagicMock()
 
 
 @dataclass

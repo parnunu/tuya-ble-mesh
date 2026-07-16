@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.8] — 2026-07-16
+
+### Added
+- Register target-address active-scan requests before initial connection so
+  Home Assistant can activate AUTO-mode ESPHome Bluetooth proxies on demand.
+- Route existing SIG Mesh import and runtime connections through Home
+  Assistant's Bluetooth device cache and `bleak-retry-connector`.
+- Share one persisted, monotonic sequence counter across config entries using
+  the same NetKey, IV Index, and controller source address, with automatic
+  migration from legacy per-entry stores.
+
+### Fixed
+- Replace the obsolete Bluetooth callback argument with Home Assistant's
+  current `BluetoothScanningMode.ACTIVE` API.
+
+---
+
 ## [0.40.7] — 2026-07-16
 
 ### Fixed

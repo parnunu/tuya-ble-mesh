@@ -25,6 +25,10 @@ from custom_components.tuya_ble_mesh.connection_manager import (
 )
 from custom_components.tuya_ble_mesh.device_capabilities import DeviceCapabilities
 from custom_components.tuya_ble_mesh.error_classifier import ErrorClass
+from custom_components.tuya_ble_mesh.ha_sequence import (
+    SEQ_SAFETY_MARGIN,
+    HASequenceStore,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -41,7 +45,7 @@ AnyMeshDevice = Union["MeshDevice", "SIGMeshDevice", "TelinkBridgeDevice", "SIGM
 _LOGGER = logging.getLogger(__name__)
 _MAX_CALLBACK_ERRORS = 3
 _SEQ_PERSIST_INTERVAL = 10
-_SEQ_SAFETY_MARGIN = 100
+_SEQ_SAFETY_MARGIN = SEQ_SAFETY_MARGIN
 _SEQ_STORE_VERSION = 1
 _INITIAL_BACKOFF = 5.0  # backward-compat alias
 _DEBOUNCE_DELAY = 1.5  # PLAT-754: backward-compat alias for connection_manager.DEBOUNCE_DELAY
@@ -124,6 +128,7 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
         hass: HomeAssistant | None = None,
         entry_id: str | None = None,
         entry: ConfigEntry | None = None,
+        sequence_store: HASequenceStore | None = None,
     ) -> None:
         if hass is not None:
             super().__init__(
@@ -136,6 +141,7 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
         self._entry_id = entry_id
         self._entry = entry
         self._seq_store: Store[dict[str, int]] | None = None
+        self._shared_sequence_store = sequence_store
         self._seq_command_count = 0
         self._seq_persist_task: asyncio.Task[None] | None = None
         self._standalone_listeners: list[Callable[[], None]] = []
@@ -899,9 +905,14 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
                 pass
 
     async def _load_seq(self) -> None:
-        if self._hass is None or self._entry_id is None:
-            return
         if not self.capabilities.has_sig_sequence:
+            return
+        if self._shared_sequence_store is not None:
+            restored = await self._shared_sequence_store.async_load(self._entry_id)
+            self._device.set_seq(restored)
+            _LOGGER.info("Restored shared SIG Mesh seq=%d", restored)
+            return
+        if self._hass is None or self._entry_id is None:
             return
         from homeassistant.helpers.storage import Store
 
@@ -913,11 +924,19 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
             restored = data["seq"] + _SEQ_SAFETY_MARGIN
             self._device.set_seq(restored)
             _LOGGER.info(
-                "Restored seq=%d (stored=%d + margin=%d)", restored, data["seq"], _SEQ_SAFETY_MARGIN
+                "Restored seq=%d (stored=%d + margin=%d)",
+                restored,
+                data["seq"],
+                _SEQ_SAFETY_MARGIN,
             )
 
     async def _save_seq(self) -> None:
-        if self._seq_store is None or not self.capabilities.has_sig_sequence:
+        if not self.capabilities.has_sig_sequence:
+            return
+        if self._shared_sequence_store is not None:
+            await self._shared_sequence_store.async_save()
+            return
+        if self._seq_store is None:
             return
         seq = self._device.get_seq()
         await self._seq_store.async_save({"seq": seq})

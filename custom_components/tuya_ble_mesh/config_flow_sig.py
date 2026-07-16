@@ -41,6 +41,11 @@ from custom_components.tuya_ble_mesh.const import (
     DEVICE_TYPE_SIG_LIGHT,
     DEVICE_TYPE_SIG_PLUG,
 )
+from custom_components.tuya_ble_mesh.ha_bluetooth import (
+    create_ha_ble_callbacks,
+    register_ha_active_scan,
+)
+from custom_components.tuya_ble_mesh.ha_sequence import get_ha_sequence_store
 
 _LOGGER = logging.getLogger(__name__)
 # Unicast addresses used during provisioning
@@ -80,14 +85,36 @@ def _sig_model_elements(raw_elements: bytes, primary_address: int) -> dict[int, 
 
 
 async def configure_existing_sig_light(
-    mac: str, config_data: dict[str, Any]
+    hass: Any, mac: str, config_data: dict[str, Any]
 ) -> tuple[int, str, int]:
     """Bind control models and return sequence, element, and brightness model."""
     from custom_components.tuya_ble_mesh.device_factory import create_device
 
     data = dict(config_data)
     data[CONF_DEVICE_TYPE] = DEVICE_TYPE_SIG_LIGHT
-    device = create_device(DEVICE_TYPE_SIG_LIGHT, mac, data)
+    ble_device_callback = None
+    ble_connect_callback = None
+    cancel_active_scan = None
+    if not data.get(CONF_ADAPTER):
+
+        def _on_ble_device_found(_service_info: Any, _change: Any) -> None:
+            """Keep the target-specific HA active-scan request alive."""
+
+        ble_device_callback, ble_connect_callback = create_ha_ble_callbacks(
+            hass, "SIG Mesh import"
+        )
+        cancel_active_scan = register_ha_active_scan(
+            hass, mac, _on_ble_device_found
+        )
+
+    device = create_device(
+        DEVICE_TYPE_SIG_LIGHT,
+        mac,
+        data,
+        ble_device_callback=ble_device_callback,
+        ble_connect_callback=ble_connect_callback,
+        seq_store=get_ha_sequence_store(hass, data),
+    )
     composition: Any | None = None
     composition_received = asyncio.Event()
 
@@ -134,6 +161,8 @@ async def configure_existing_sig_light(
     finally:
         device.unregister_composition_callback(_on_composition)
         await device.disconnect()
+        if cancel_active_scan is not None:
+            cancel_active_scan()
 
 
 async def run_provision(hass: Any, mac: str) -> tuple[str, str, str]:
@@ -402,7 +431,7 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
                     initial_sequence,
                     level_unicast_target,
                     brightness_model_id,
-                ) = await configure_existing_sig_light(mac, user_input)
+                ) = await configure_existing_sig_light(flow.hass, mac, user_input)
             except Exception as exc:
                 _LOGGER.warning("SIG Mesh model binding failed for %s: %s", mac, exc)
                 errors["base"] = "model_bind_failed"

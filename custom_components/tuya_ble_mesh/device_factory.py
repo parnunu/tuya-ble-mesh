@@ -44,7 +44,7 @@ if TYPE_CHECKING:
         SIGMeshBridgeDevice,
         TelinkBridgeDevice,
     )
-    from tuya_ble_mesh.sig_mesh_device import SIGMeshDevice
+    from tuya_ble_mesh.sig_mesh_device import SeqStore, SIGMeshDevice
 
 # Union type alias for all mesh device types returned by device_factory
 AnyMeshDevice: TypeAlias = Union[
@@ -106,6 +106,7 @@ def _create_sig_plug(
     data: Mapping[str, Any],
     ble_device_callback: Callable[[str], Any] | None,
     ble_connect_callback: Callable[[Any], Any] | None = None,
+    seq_store: SeqStore | None = None,
 ) -> SIGMeshDevice:
     """Create a SIG Mesh direct device.
 
@@ -165,6 +166,7 @@ def _create_sig_plug(
         iv_index=iv_index,
         level_target_addr=level_target_addr,
         brightness_model_id=brightness_model_id,
+        seq_store=seq_store,
         ble_device_callback=ble_device_callback,
         ble_connect_callback=ble_connect_callback,
         adapter=adapter,
@@ -224,6 +226,7 @@ def create_device(
     data: Mapping[str, Any],
     ble_device_callback: Callable[[str], Any] | None = None,
     ble_connect_callback: Callable[[Any], Any] | None = None,
+    seq_store: SeqStore | None = None,
 ) -> AnyMeshDevice:
     """Create a mesh device instance based on device_type.
 
@@ -233,9 +236,18 @@ def create_device(
         data: Config entry data dict.
         ble_device_callback: Optional callback for HA BLE proxy resolution.
         ble_connect_callback: Optional callback for HA managed BLE connections (PLAT-737).
+        seq_store: Optional shared SIG Mesh sequence store.
 
     Returns:
         A device instance (MeshDevice, SIGMeshDevice, SIGMeshBridgeDevice, or TelinkBridgeDevice).
     """
+    if device_type in (DEVICE_TYPE_SIG_PLUG, DEVICE_TYPE_SIG_LIGHT):
+        return _create_sig_plug(
+            mac_address,
+            data,
+            ble_device_callback,
+            ble_connect_callback,
+            seq_store,
+        )
     creator = _DEVICE_CREATORS.get(device_type, _create_default_mesh_device)
     return creator(mac_address, data, ble_device_callback, ble_connect_callback)

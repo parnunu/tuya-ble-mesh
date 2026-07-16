@@ -525,6 +525,7 @@ class TestExistingSIGLightStep:
             return_value=device,
         ):
             result = await configure_existing_sig_light(
+                MagicMock(),
                 "02:00:00:00:00:01",
                 {
                     CONF_NET_KEY: _TEST_NET_KEY,
@@ -542,6 +543,59 @@ class TestExistingSIGLightStep:
             call(0x00B1, 0, 0x1002),
         ]
         device.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_configure_routes_through_ha_proxy_and_cancels_scan(self) -> None:
+        """Existing-light import should activate and route through HA proxies."""
+        hass = MagicMock()
+        device = MagicMock()
+        composition_callbacks: list[Any] = []
+        device.register_composition_callback.side_effect = composition_callbacks.append
+        composition = MagicMock(
+            raw_elements=struct.pack("<HBBHH", 0, 2, 0, 0x1000, 0x1002)
+        )
+
+        async def _connect(**_kwargs: Any) -> None:
+            composition_callbacks[0](composition)
+
+        device.connect = AsyncMock(side_effect=_connect)
+        device.send_config_model_app_bind = AsyncMock(return_value=True)
+        device.get_seq.return_value = 45
+        device.disconnect = AsyncMock()
+        ble_device_callback = MagicMock()
+        ble_connect_callback = AsyncMock()
+        cancel_scan = MagicMock()
+
+        with (
+            patch(
+                "custom_components.tuya_ble_mesh.device_factory.create_device",
+                return_value=device,
+            ) as create_device,
+            patch(
+                "custom_components.tuya_ble_mesh.config_flow_sig.create_ha_ble_callbacks",
+                return_value=(ble_device_callback, ble_connect_callback),
+            ),
+            patch(
+                "custom_components.tuya_ble_mesh.config_flow_sig.register_ha_active_scan",
+                return_value=cancel_scan,
+            ) as register_scan,
+        ):
+            result = await configure_existing_sig_light(
+                hass,
+                "02:00:00:00:00:01",
+                {
+                    CONF_NET_KEY: _TEST_NET_KEY,
+                    CONF_DEV_KEY: _TEST_DEV_KEY,
+                    CONF_APP_KEY: _TEST_APP_KEY,
+                    CONF_UNICAST_TARGET: "00B0",
+                },
+            )
+
+        assert result == (45, "00B0", 0x1002)
+        assert create_device.call_args.kwargs["ble_device_callback"] is ble_device_callback
+        assert create_device.call_args.kwargs["ble_connect_callback"] is ble_connect_callback
+        assert register_scan.call_args.args[1] == "02:00:00:00:00:01"
+        cancel_scan.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_configure_falls_back_to_light_lightness_model(self) -> None:
@@ -568,6 +622,7 @@ class TestExistingSIGLightStep:
             return_value=device,
         ):
             result = await configure_existing_sig_light(
+                MagicMock(),
                 "02:00:00:00:00:01",
                 {
                     CONF_NET_KEY: _TEST_NET_KEY,

@@ -288,6 +288,14 @@ class TestSIGMeshDeviceBLEDisconnect:
 
         assert dev._client is None
 
+    def test_on_ble_disconnect_accepts_no_client_argument(self) -> None:
+        dev = SIGMeshDevice("DC:23:4D:21:43:A5", 0x00AA, 0x0001, MagicMock())
+        dev._client = MagicMock()
+
+        dev._on_ble_disconnect()
+
+        assert dev._client is None
+
 
 class TestSegmentReassembly:
     """Test segmented message reassembly in SIGMeshDevice."""

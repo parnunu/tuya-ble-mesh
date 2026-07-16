@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.7] — 2026-07-16
+
+### Fixed
+- Dispatch synchronous Home Assistant coordinator updates directly on the event
+  loop instead of wrapping a `None` return value as a coroutine.
+- Accept both high-level Bleak and low-level BlueZ disconnect callback
+  signatures for explicit adapters.
+
+---
+
 ## [0.40.6] — 2026-07-16
 
 ### Added

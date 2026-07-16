@@ -652,21 +652,10 @@ class TuyaBLEMeshCoordinator(DataUpdateCoordinator[None]):  # type: ignore[misc]
 
     def _dispatch_update(self) -> None:
         if self._hass is not None:
-            # PLAT-747: Use entry.async_create_background_task for tracked task lifecycle
-            if self._entry is not None:
-                self._hass.loop.call_soon_threadsafe(
-                    lambda: self._entry.async_create_background_task(
-                        self._hass,
-                        self.async_set_updated_data(None),
-                        "dispatch_update",
-                        eager_start=True,
-                    )
-                )
-            else:
-                # Fallback for standalone mode (no entry)
-                self._hass.loop.call_soon_threadsafe(
-                    lambda: self._hass.async_create_task(self.async_set_updated_data(None))
-                )
+            # DataUpdateCoordinator.async_set_updated_data is synchronous. Schedule
+            # it on HA's event loop directly; wrapping its None return value as a
+            # coroutine raises TypeError on every device notification.
+            self._hass.loop.call_soon_threadsafe(self.async_set_updated_data, None)
         else:
             self._notify_listeners()
 

@@ -440,11 +440,12 @@ class SIGMeshDeviceSegmentsMixin:
             except Exception:
                 _LOGGER.warning("Composition callback error", exc_info=True)
 
-    def _on_ble_disconnect(self, _client: Any) -> None:
+    def _on_ble_disconnect(self, _client: Any = None) -> None:
         """Handle BLE disconnection event.
 
         Args:
-            _client: The disconnected BleakClient.
+            _client: The disconnected BleakClient when supplied by the backend.
+                Bleak's low-level BlueZ backend invokes this callback without it.
         """
         _LOGGER.warning("SIG Mesh device disconnected: %s", self._address)
         self._client = None

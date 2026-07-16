@@ -41,6 +41,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_BIND_MODELS,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
+    CONF_BRIGHTNESS_MODEL_ID,
     CONF_DEV_KEY,
     CONF_DEVICE_TYPE,
     CONF_INITIAL_SEQUENCE,
@@ -535,12 +536,53 @@ class TestExistingSIGLightStep:
                 },
             )
 
-        assert result == (45, "00B1")
+        assert result == (45, "00B1", 0x1002)
         assert device.send_config_model_app_bind.await_args_list == [
             call(0x00B0, 0, 0x1000),
             call(0x00B1, 0, 0x1002),
         ]
         device.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_configure_falls_back_to_light_lightness_model(self) -> None:
+        device = MagicMock()
+        callbacks: list[Any] = []
+        device.register_composition_callback.side_effect = callbacks.append
+        composition = MagicMock(
+            raw_elements=(
+                struct.pack("<HBBHH", 0, 2, 0, 0x0000, 0x1000)
+                + struct.pack("<HBBH", 0, 1, 0, 0x1300)
+            )
+        )
+
+        async def _connect(**_kwargs: Any) -> None:
+            callbacks[0](composition)
+
+        device.connect = AsyncMock(side_effect=_connect)
+        device.send_config_model_app_bind = AsyncMock(return_value=True)
+        device.get_seq.return_value = 45
+        device.disconnect = AsyncMock()
+
+        with patch(
+            "custom_components.tuya_ble_mesh.device_factory.create_device",
+            return_value=device,
+        ):
+            result = await configure_existing_sig_light(
+                "02:00:00:00:00:01",
+                {
+                    CONF_NET_KEY: _TEST_NET_KEY,
+                    CONF_DEV_KEY: _TEST_DEV_KEY,
+                    CONF_APP_KEY: _TEST_APP_KEY,
+                    CONF_UNICAST_TARGET: "00B0",
+                    CONF_ADAPTER: "hci0",
+                },
+            )
+
+        assert result == (45, "00B1", 0x1300)
+        assert device.send_config_model_app_bind.await_args_list == [
+            call(0x00B0, 0, 0x1000),
+            call(0x00B1, 0, 0x1300),
+        ]
 
     @pytest.mark.asyncio
     async def test_user_step_branches_to_existing_sig_light(self) -> None:
@@ -623,7 +665,7 @@ class TestExistingSIGLightStep:
 
         with patch(
             "custom_components.tuya_ble_mesh.config_flow_sig.configure_existing_sig_light",
-            new=AsyncMock(return_value=(45, "00B1")),
+            new=AsyncMock(return_value=(45, "00B1", 0x1002)),
             create=True,
         ) as configure:
             result = await flow.async_step_import(import_data)
@@ -632,6 +674,7 @@ class TestExistingSIGLightStep:
         assert result["type"] == "create_entry"
         assert result["data"]["initial_sequence"] == 45
         assert result["data"][CONF_LEVEL_UNICAST_TARGET] == "00B1"
+        assert result["data"][CONF_BRIGHTNESS_MODEL_ID] == 0x1002
         assert "bind_models" not in result["data"]
 
 

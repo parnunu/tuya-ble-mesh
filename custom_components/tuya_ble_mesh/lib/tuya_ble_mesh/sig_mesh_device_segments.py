@@ -24,6 +24,7 @@ from tuya_ble_mesh.exceptions import MalformedPacketError
 from tuya_ble_mesh.logging_context import MeshLogAdapter
 from tuya_ble_mesh.sig_mesh_protocol import (
     _OPCODE_COMPOSITION_STATUS,
+    OP_LIGHT_LIGHTNESS_STATUS,
     CompositionData,
     decrypt_access_payload,
     decrypt_network_pdu,
@@ -363,6 +364,17 @@ class SIGMeshDeviceSegmentsMixin:
         elif opcode == _OPCODE_LEVEL_STATUS and len(params) >= 2:
             level = struct.unpack_from("<h", params)[0]
             _LOGGER.info("Generic Level Status from 0x%04X: %d", src, level)
+            for callback in list(self._level_callbacks):
+                try:
+                    callback(level)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    _LOGGER.warning("Level callback error", exc_info=True)
+        elif opcode == OP_LIGHT_LIGHTNESS_STATUS and len(params) >= 2:
+            lightness = struct.unpack_from("<H", params)[0]
+            level = lightness - 32768
+            _LOGGER.info("Light Lightness Status from 0x%04X: %d", src, lightness)
             for callback in list(self._level_callbacks):
                 try:
                     callback(level)

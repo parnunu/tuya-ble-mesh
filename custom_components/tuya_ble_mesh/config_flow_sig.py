@@ -26,6 +26,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_BIND_MODELS,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
+    CONF_BRIGHTNESS_MODEL_ID,
     CONF_DEV_KEY,
     CONF_DEVICE_TYPE,
     CONF_INITIAL_SEQUENCE,
@@ -48,6 +49,7 @@ _UNICAST_DEVICE_DEFAULT = 0x00B0
 # Generic model server IDs used by direct lights
 _MODEL_GENERIC_ONOFF_SERVER = 0x1000
 _MODEL_GENERIC_LEVEL_SERVER = 0x1002
+_MODEL_LIGHT_LIGHTNESS_SERVER = 0x1300
 # Seconds to wait for device to reboot as Proxy Service after provisioning
 _POST_PROV_REBOOT_DELAY = 6.0
 
@@ -79,8 +81,8 @@ def _sig_model_elements(raw_elements: bytes, primary_address: int) -> dict[int, 
 
 async def configure_existing_sig_light(
     mac: str, config_data: dict[str, Any]
-) -> tuple[int, str]:
-    """Bind control models and return next sequence plus level element."""
+) -> tuple[int, str, int]:
+    """Bind control models and return sequence, element, and brightness model."""
     from custom_components.tuya_ble_mesh.device_factory import create_device
 
     data = dict(config_data)
@@ -105,7 +107,15 @@ async def configure_existing_sig_light(
         if composition is None:
             raise RuntimeError("Composition Data Status was empty")
         model_elements = _sig_model_elements(composition.raw_elements, target)
-        for model_id in (_MODEL_GENERIC_ONOFF_SERVER, _MODEL_GENERIC_LEVEL_SERVER):
+        if _MODEL_GENERIC_LEVEL_SERVER in model_elements:
+            brightness_model = _MODEL_GENERIC_LEVEL_SERVER
+        elif _MODEL_LIGHT_LIGHTNESS_SERVER in model_elements:
+            brightness_model = _MODEL_LIGHT_LIGHTNESS_SERVER
+        else:
+            available = ", ".join(f"0x{model_id:04X}" for model_id in model_elements)
+            msg = f"Composition Data has no supported brightness model ({available})"
+            raise RuntimeError(msg)
+        for model_id in (_MODEL_GENERIC_ONOFF_SERVER, brightness_model):
             element_address = model_elements.get(model_id)
             if element_address is None:
                 msg = f"Composition Data does not contain model 0x{model_id:04X}"
@@ -119,8 +129,8 @@ async def configure_existing_sig_light(
             if not await device.send_config_model_app_bind(element_address, 0, model_id):
                 msg = f"Model App Bind failed for model 0x{model_id:04X}"
                 raise RuntimeError(msg)
-        level_address = model_elements[_MODEL_GENERIC_LEVEL_SERVER]
-        return int(device.get_seq()), f"{level_address:04X}"
+        level_address = model_elements[brightness_model]
+        return int(device.get_seq()), f"{level_address:04X}", brightness_model
     finally:
         device.unregister_composition_callback(_on_composition)
         await device.disconnect()
@@ -385,11 +395,14 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
 
         mac = flow._discovery_info["address"].upper()
         level_unicast_target: str | None = None
+        brightness_model_id: int | None = None
         if not errors and user_input.get(CONF_BIND_MODELS, False):
             try:
-                initial_sequence, level_unicast_target = await configure_existing_sig_light(
-                    mac, user_input
-                )
+                (
+                    initial_sequence,
+                    level_unicast_target,
+                    brightness_model_id,
+                ) = await configure_existing_sig_light(mac, user_input)
             except Exception as exc:
                 _LOGGER.warning("SIG Mesh model binding failed for %s: %s", mac, exc)
                 errors["base"] = "model_bind_failed"
@@ -410,6 +423,8 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
                 extra[CONF_INITIAL_SEQUENCE] = initial_sequence
             if level_unicast_target is not None:
                 extra[CONF_LEVEL_UNICAST_TARGET] = level_unicast_target
+            if brightness_model_id is not None:
+                extra[CONF_BRIGHTNESS_MODEL_ID] = brightness_model_id
             return flow._finalize_entry(
                 mac=mac,
                 device_type=DEVICE_TYPE_SIG_LIGHT,

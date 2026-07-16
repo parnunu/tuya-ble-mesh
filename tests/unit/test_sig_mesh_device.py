@@ -385,6 +385,16 @@ class TestSegmentReassembly:
 
         cb.assert_called_once_with(True)
 
+    @pytest.mark.asyncio
+    async def test_dispatch_light_lightness_status_as_level(self) -> None:
+        dev = self._make_device_with_keys()
+        cb = MagicMock()
+        dev.register_level_callback(cb)
+
+        await dev._dispatch_access_payload(0x00AA, b"\x82\x4e\x00\x80")
+
+        cb.assert_called_once_with(0)
+
     async def test_dispatch_access_payload_unknown_opcode(self) -> None:
         """Unknown opcode should not crash."""
         dev = self._make_device_with_keys()

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.6] — 2026-07-16
+
+### Added
+- Use the SIG Light Lightness Server (`0x1300`) for brightness when Composition
+  Data does not advertise Generic Level Server (`0x1002`).
+- Decode acknowledged Light Lightness Status messages into native Home
+  Assistant brightness updates.
+
+---
+
 ## [0.40.5] — 2026-07-16
 
 ### Fixed

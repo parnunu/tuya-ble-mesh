@@ -14,6 +14,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
+    CONF_BRIGHTNESS_MODEL_ID,
     CONF_DEV_KEY,
     CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
@@ -137,6 +138,7 @@ def _create_sig_plug(
     level_target_addr = int(
         data.get(CONF_LEVEL_UNICAST_TARGET, f"{target_addr:04X}"), 16
     )
+    brightness_model_id = int(data.get(CONF_BRIGHTNESS_MODEL_ID, 0x1002))
     our_addr = int(data.get(CONF_UNICAST_OUR, "0001"), 16)
     iv_index: int = data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX)
     adapter = data.get(CONF_ADAPTER)
@@ -162,6 +164,7 @@ def _create_sig_plug(
         op_item_prefix=op_prefix,
         iv_index=iv_index,
         level_target_addr=level_target_addr,
+        brightness_model_id=brightness_model_id,
         ble_device_callback=ble_device_callback,
         ble_connect_callback=ble_connect_callback,
         adapter=adapter,

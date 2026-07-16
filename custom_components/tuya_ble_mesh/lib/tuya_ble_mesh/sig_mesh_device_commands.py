@@ -42,6 +42,7 @@ from tuya_ble_mesh.sig_mesh_protocol import (
     encrypt_network_pdu,
     generic_level_set,
     generic_onoff_set,
+    light_lightness_set,
     make_access_segmented,
     make_access_unsegmented,
     make_proxy_pdu,
@@ -80,6 +81,7 @@ class SIGMeshDeviceCommandsMixin:
     _address: str
     _target_addr: int
     _level_target_addr: int
+    _brightness_model_id: int
     _our_addr: int
     _tid: int
     _correlation_id: int
@@ -204,7 +206,10 @@ class SIGMeshDeviceCommandsMixin:
 
         for attempt in range(1, max_retries + 1):
             try:
-                access_payload = generic_level_set(level, transaction_id)
+                if self._brightness_model_id == 0x1300:
+                    access_payload = light_lightness_set(level + 32768, transaction_id)
+                else:
+                    access_payload = generic_level_set(level, transaction_id)
                 seq = await self._next_seq()
                 level_target = self._level_target_addr
                 transport_pdu = make_access_unsegmented(

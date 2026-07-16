@@ -30,6 +30,7 @@ from tuya_ble_mesh.sig_mesh_protocol import (  # noqa: E402
     MeshKeys,
     generic_level_set,
     generic_onoff_set,
+    light_lightness_set,
     make_access_unsegmented,
 )
 
@@ -230,6 +231,19 @@ class TestSendLevel:
             await dev.send_level(0)
 
         assert make_access.call_args.args[2] == 0x0002
+
+    @pytest.mark.asyncio
+    async def test_light_lightness_model_encodes_unsigned_lightness(self) -> None:
+        dev = _make_device()
+        dev._brightness_model_id = 0x1300
+
+        with patch(
+            "tuya_ble_mesh.sig_mesh_device_commands.light_lightness_set",
+            wraps=light_lightness_set,
+        ) as encode:
+            await dev.send_level(0)
+
+        encode.assert_called_once_with(32768, 0)
 
 
     @pytest.mark.asyncio

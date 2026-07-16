@@ -73,6 +73,10 @@ OP_GENERIC_ONOFF_STATUS = 0x8204
 OP_GENERIC_LEVEL_SET = 0x8206
 OP_GENERIC_LEVEL_STATUS = 0x8208
 
+# --- Light Lightness model opcodes (Mesh Model 6.1) ---
+OP_LIGHT_LIGHTNESS_SET = 0x824C
+OP_LIGHT_LIGHTNESS_STATUS = 0x824E
+
 # --- Tuya Vendor Model (CID 0x07D0) ---
 TUYA_VENDOR_OPCODE = 0xCDD007
 TUYA_VENDOR_WRITE_ACK = 0xC9D007
@@ -229,6 +233,16 @@ def generic_level_set(level: int, tid: int = 0) -> bytes:
         msg = f"level must be -32768..32767, got {level}"
         raise ProtocolError(msg)
     return struct.pack(">H", OP_GENERIC_LEVEL_SET) + struct.pack("<hB", level, tid & 0xFF)
+
+
+def light_lightness_set(lightness: int, tid: int = 0) -> bytes:
+    """Light Lightness Set (opcode 0x824C)."""
+    if not 0 <= lightness <= 0xFFFF:
+        msg = f"lightness must be 0..65535, got {lightness}"
+        raise ProtocolError(msg)
+    return struct.pack(">H", OP_LIGHT_LIGHTNESS_SET) + struct.pack(
+        "<HB", lightness, tid & 0xFF
+    )
 
 
 # ============================================================

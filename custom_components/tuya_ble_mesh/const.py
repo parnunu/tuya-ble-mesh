@@ -32,6 +32,7 @@ DEFAULT_MESH_ADDRESS = 0  # 0 = connected device itself
 
 # SIG Mesh config keys
 CONF_UNICAST_TARGET = "unicast_target"
+CONF_LEVEL_UNICAST_TARGET = "level_unicast_target"
 CONF_UNICAST_OUR = "unicast_our"
 CONF_OP_ITEM_PREFIX = "op_item_prefix"
 CONF_IV_INDEX = "iv_index"

@@ -30,6 +30,7 @@ from tuya_ble_mesh.sig_mesh_protocol import (  # noqa: E402
     MeshKeys,
     generic_level_set,
     generic_onoff_set,
+    make_access_unsegmented,
 )
 
 
@@ -216,6 +217,19 @@ class TestSendLevel:
         await dev.send_level(0)
 
         dev._client.write_gatt_char.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_uses_dedicated_level_element(self) -> None:
+        dev = _make_device()
+        dev._level_target_addr = 0x0002
+
+        with patch(
+            "tuya_ble_mesh.sig_mesh_device_commands.make_access_unsegmented",
+            wraps=make_access_unsegmented,
+        ) as make_access:
+            await dev.send_level(0)
+
+        assert make_access.call_args.args[2] == 0x0002
 
 
     @pytest.mark.asyncio

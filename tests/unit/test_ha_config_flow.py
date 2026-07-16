@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import struct
 import sys
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_DEVICE_TYPE,
     CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
+    CONF_LEVEL_UNICAST_TARGET,
     CONF_MAC_ADDRESS,
     CONF_MESH_ADDRESS,
     CONF_MESH_NAME,
@@ -500,7 +502,19 @@ class TestExistingSIGLightStep:
     @pytest.mark.asyncio
     async def test_configure_binds_onoff_and_level_models(self) -> None:
         device = MagicMock()
-        device.connect = AsyncMock()
+        callbacks: list[Any] = []
+        device.register_composition_callback.side_effect = callbacks.append
+        composition = MagicMock(
+            raw_elements=(
+                struct.pack("<HBBHH", 0, 2, 0, 0x0000, 0x1000)
+                + struct.pack("<HBBHH", 0, 2, 0, 0x1002, 0x1300)
+            )
+        )
+
+        async def _connect(**_kwargs: Any) -> None:
+            callbacks[0](composition)
+
+        device.connect = AsyncMock(side_effect=_connect)
         device.send_config_model_app_bind = AsyncMock(return_value=True)
         device.get_seq.return_value = 45
         device.disconnect = AsyncMock()
@@ -521,10 +535,10 @@ class TestExistingSIGLightStep:
                 },
             )
 
-        assert result == 45
+        assert result == (45, "00B1")
         assert device.send_config_model_app_bind.await_args_list == [
             call(0x00B0, 0, 0x1000),
-            call(0x00B0, 0, 0x1002),
+            call(0x00B1, 0, 0x1002),
         ]
         device.disconnect.assert_awaited_once()
 
@@ -609,7 +623,7 @@ class TestExistingSIGLightStep:
 
         with patch(
             "custom_components.tuya_ble_mesh.config_flow_sig.configure_existing_sig_light",
-            new=AsyncMock(return_value=45),
+            new=AsyncMock(return_value=(45, "00B1")),
             create=True,
         ) as configure:
             result = await flow.async_step_import(import_data)
@@ -617,6 +631,7 @@ class TestExistingSIGLightStep:
         configure.assert_awaited_once()
         assert result["type"] == "create_entry"
         assert result["data"]["initial_sequence"] == 45
+        assert result["data"][CONF_LEVEL_UNICAST_TARGET] == "00B1"
         assert "bind_models" not in result["data"]
 
 

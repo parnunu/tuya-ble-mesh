@@ -30,6 +30,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_DEVICE_TYPE,
     CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
+    CONF_LEVEL_UNICAST_TARGET,
     CONF_NET_KEY,
     CONF_UNICAST_OUR,
     CONF_UNICAST_TARGET,
@@ -51,22 +52,77 @@ _MODEL_GENERIC_LEVEL_SERVER = 0x1002
 _POST_PROV_REBOOT_DELAY = 6.0
 
 
-async def configure_existing_sig_light(mac: str, config_data: dict[str, Any]) -> int:
-    """Bind control models and return the next replay-safe sequence number."""
+def _sig_model_elements(raw_elements: bytes, primary_address: int) -> dict[int, int]:
+    """Map SIG model IDs to their element unicast addresses."""
+    result: dict[int, int] = {}
+    offset = 0
+    element_address = primary_address
+    while offset < len(raw_elements):
+        if len(raw_elements) - offset < 4:
+            raise ValueError("Truncated Composition Data element header")
+        num_sig = raw_elements[offset + 2]
+        num_vendor = raw_elements[offset + 3]
+        element_size = 4 + (num_sig * 2) + (num_vendor * 4)
+        if offset + element_size > len(raw_elements):
+            raise ValueError("Truncated Composition Data model list")
+        sig_offset = offset + 4
+        for index in range(num_sig):
+            model_id = int.from_bytes(
+                raw_elements[sig_offset + (index * 2) : sig_offset + (index * 2) + 2],
+                "little",
+            )
+            result.setdefault(model_id, element_address)
+        offset += element_size
+        element_address += 1
+    return result
+
+
+async def configure_existing_sig_light(
+    mac: str, config_data: dict[str, Any]
+) -> tuple[int, str]:
+    """Bind control models and return next sequence plus level element."""
     from custom_components.tuya_ble_mesh.device_factory import create_device
 
     data = dict(config_data)
     data[CONF_DEVICE_TYPE] = DEVICE_TYPE_SIG_LIGHT
     device = create_device(DEVICE_TYPE_SIG_LIGHT, mac, data)
+    composition: Any | None = None
+    composition_received = asyncio.Event()
+
+    def _on_composition(value: Any) -> None:
+        nonlocal composition
+        composition = value
+        composition_received.set()
+
+    device.register_composition_callback(_on_composition)
     try:
         await device.connect(timeout=20.0, max_retries=3)
         target = int(str(data.get(CONF_UNICAST_TARGET, "00B0")), 16)
+        try:
+            await asyncio.wait_for(composition_received.wait(), timeout=5.0)
+        except TimeoutError as err:
+            raise RuntimeError("Composition Data Status was not received") from err
+        if composition is None:
+            raise RuntimeError("Composition Data Status was empty")
+        model_elements = _sig_model_elements(composition.raw_elements, target)
         for model_id in (_MODEL_GENERIC_ONOFF_SERVER, _MODEL_GENERIC_LEVEL_SERVER):
-            if not await device.send_config_model_app_bind(target, 0, model_id):
+            element_address = model_elements.get(model_id)
+            if element_address is None:
+                msg = f"Composition Data does not contain model 0x{model_id:04X}"
+                raise RuntimeError(msg)
+            _LOGGER.info(
+                "Binding SIG model 0x%04X on element 0x%04X for %s",
+                model_id,
+                element_address,
+                mac,
+            )
+            if not await device.send_config_model_app_bind(element_address, 0, model_id):
                 msg = f"Model App Bind failed for model 0x{model_id:04X}"
                 raise RuntimeError(msg)
-        return int(device.get_seq())
+        level_address = model_elements[_MODEL_GENERIC_LEVEL_SERVER]
+        return int(device.get_seq()), f"{level_address:04X}"
     finally:
+        device.unregister_composition_callback(_on_composition)
         await device.disconnect()
 
 
@@ -328,9 +384,12 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
             errors[CONF_INITIAL_SEQUENCE] = "invalid_sequence"
 
         mac = flow._discovery_info["address"].upper()
+        level_unicast_target: str | None = None
         if not errors and user_input.get(CONF_BIND_MODELS, False):
             try:
-                initial_sequence = await configure_existing_sig_light(mac, user_input)
+                initial_sequence, level_unicast_target = await configure_existing_sig_light(
+                    mac, user_input
+                )
             except Exception as exc:
                 _LOGGER.warning("SIG Mesh model binding failed for %s: %s", mac, exc)
                 errors["base"] = "model_bind_failed"
@@ -349,6 +408,8 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
             }
             if CONF_INITIAL_SEQUENCE in user_input or user_input.get(CONF_BIND_MODELS, False):
                 extra[CONF_INITIAL_SEQUENCE] = initial_sequence
+            if level_unicast_target is not None:
+                extra[CONF_LEVEL_UNICAST_TARGET] = level_unicast_target
             return flow._finalize_entry(
                 mac=mac,
                 device_type=DEVICE_TYPE_SIG_LIGHT,

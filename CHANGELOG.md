@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.5] — 2026-07-16
+
+### Fixed
+- Parse SIG Mesh Composition Data and bind Generic OnOff/Level models on the
+  elements that actually host them instead of assuming one primary element.
+- Persist the discovered Generic Level element and route brightness commands
+  there while power commands continue to target the primary element.
+
+---
+
 ## [0.40.4] — 2026-07-16
 
 ### Fixed

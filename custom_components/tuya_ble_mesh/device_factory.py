@@ -17,6 +17,7 @@ from custom_components.tuya_ble_mesh.const import (
     CONF_DEV_KEY,
     CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
+    CONF_LEVEL_UNICAST_TARGET,
     CONF_MESH_ADDRESS,
     CONF_MESH_NAME,
     CONF_MESH_PASSWORD,
@@ -133,6 +134,9 @@ def _create_sig_plug(
         )
 
     target_addr = int(data.get(CONF_UNICAST_TARGET, "00B0"), 16)
+    level_target_addr = int(
+        data.get(CONF_LEVEL_UNICAST_TARGET, f"{target_addr:04X}"), 16
+    )
     our_addr = int(data.get(CONF_UNICAST_OUR, "0001"), 16)
     iv_index: int = data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX)
     adapter = data.get(CONF_ADAPTER)
@@ -157,6 +161,7 @@ def _create_sig_plug(
         DictSecretsManager(secrets_dict),
         op_item_prefix=op_prefix,
         iv_index=iv_index,
+        level_target_addr=level_target_addr,
         ble_device_callback=ble_device_callback,
         ble_connect_callback=ble_connect_callback,
         adapter=adapter,

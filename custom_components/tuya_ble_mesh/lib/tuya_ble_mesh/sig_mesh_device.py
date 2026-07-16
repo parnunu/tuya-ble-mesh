@@ -199,6 +199,7 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
         ble_device_callback: Any = None,
         ble_connect_callback: Callable[[Any], Awaitable[BleakClient]] | None = None,
         adapter: str | None = None,
+        level_target_addr: int | None = None,
     ) -> None:
         """Initialize a SIG Mesh device interface.
 
@@ -217,9 +218,14 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                 BleakClient, normally backed by bleak-retry-connector in HA.
             adapter: BLE adapter name (e.g. "hci0"). Forces scan and connect
                 via this specific adapter, bypassing HA's habluetooth routing.
+            level_target_addr: Element address hosting Generic Level Server.
+                Defaults to ``target_addr`` for single-element devices.
         """
         self._address = address.upper()
         self._target_addr = target_addr
+        self._level_target_addr = (
+            target_addr if level_target_addr is None else level_target_addr
+        )
         self._our_addr = our_addr
         self._secrets = secrets
         self._op_item_prefix = op_item_prefix

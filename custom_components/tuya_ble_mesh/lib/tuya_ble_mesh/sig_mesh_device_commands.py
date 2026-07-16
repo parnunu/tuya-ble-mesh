@@ -79,6 +79,7 @@ class SIGMeshDeviceCommandsMixin:
     _keys: MeshKeys | None
     _address: str
     _target_addr: int
+    _level_target_addr: int
     _our_addr: int
     _tid: int
     _correlation_id: int
@@ -205,10 +206,11 @@ class SIGMeshDeviceCommandsMixin:
             try:
                 access_payload = generic_level_set(level, transaction_id)
                 seq = await self._next_seq()
+                level_target = self._level_target_addr
                 transport_pdu = make_access_unsegmented(
                     app_key,
                     self._our_addr,
-                    self._target_addr,
+                    level_target,
                     seq,
                     self._keys.iv_index,
                     access_payload,
@@ -223,7 +225,7 @@ class SIGMeshDeviceCommandsMixin:
                     ttl=_DEFAULT_TTL,
                     seq=seq,
                     src=self._our_addr,
-                    dst=self._target_addr,
+                    dst=level_target,
                     transport_pdu=transport_pdu,
                     iv_index=self._keys.iv_index,
                 )
@@ -235,7 +237,7 @@ class SIGMeshDeviceCommandsMixin:
                 _LOGGER.info(
                     "Generic Level %d sent to 0x%04X (seq=%d, attempt=%d)",
                     level,
-                    self._target_addr,
+                    level_target,
                     seq,
                     attempt,
                 )

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.4] — 2026-07-16
+
+### Fixed
+- Adapt direct BlueZ one-argument notification callbacks to the integration's
+  `(sender, data)` handler so Mesh status responses are processed.
+
+---
+
 ## [0.40.3] — 2026-07-16
 
 ### Fixed

@@ -460,14 +460,25 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                     # Subscribe to Proxy Data Out notifications
                     try:
                         notify_kwargs: dict[str, Any] = {}
+                        high_level_notify = self._on_notify
+                        notify_callback: Callable[..., None] = high_level_notify
                         if direct_bluez:
                             # Low-level Bleak BlueZ backends expect the
                             # backend-specific dictionary that BleakClient
-                            # normally supplies.
+                            # normally supplies, and invoke callbacks with only
+                            # the notification payload.
                             notify_kwargs["bluez"] = {}
+
+                            def _direct_notify(
+                                data: bytearray,
+                                handler: Callable[..., None] = high_level_notify,
+                            ) -> None:
+                                handler(self._proxy_data_out, data)
+
+                            notify_callback = _direct_notify
                         await client.start_notify(
                             self._proxy_data_out,
-                            self._on_notify,
+                            notify_callback,
                             **notify_kwargs,
                         )
                     except (EOFError, BleakError, BleakDBusError, OSError) as notify_exc:

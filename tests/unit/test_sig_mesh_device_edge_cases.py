@@ -138,6 +138,7 @@ class TestConnectEdgeCases:
                 create=True,
             ) as create_direct,
             patch("tuya_ble_mesh.sig_mesh_device.BleakScanner") as mock_scanner,
+            patch.object(dev, "_on_notify") as on_notify,
             patch.object(dev, "request_composition_data", new_callable=AsyncMock),
         ):
             await dev.connect(max_retries=1)
@@ -151,6 +152,10 @@ class TestConnectEdgeCases:
         )
         client.connect.assert_awaited_once_with(pair=False)
         assert client.start_notify.call_args.kwargs == {"bluez": {}}
+        direct_notify = client.start_notify.call_args.args[1]
+        payload = bytearray(b"\x00")
+        direct_notify(payload)
+        on_notify.assert_called_once_with(dev._proxy_data_out, payload)
         mock_scanner.find_device_by_address.assert_not_called()
 
     @pytest.mark.asyncio

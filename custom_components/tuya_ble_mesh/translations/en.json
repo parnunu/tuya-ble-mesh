@@ -61,7 +61,9 @@
           "unicast_target": "Device unicast address",
           "unicast_our": "Controller unicast address",
           "iv_index": "IV index",
-          "adapter": "Bluetooth adapter"
+          "adapter": "Bluetooth adapter",
+          "initial_sequence": "Next sequence number",
+          "bind_models": "Bind on/off and brightness models"
         },
         "data_description": {
           "net_key": "32 hexadecimal characters.",
@@ -70,7 +72,9 @@
           "unicast_target": "Four hexadecimal characters, normally 00B0.",
           "unicast_our": "Four hexadecimal characters, normally 0001.",
           "iv_index": "The current SIG Mesh IV index.",
-          "adapter": "Local BlueZ adapter to own directly, normally hci0."
+          "adapter": "Local BlueZ adapter to own directly, normally hci0.",
+          "initial_sequence": "Resume at or above the next sequence from the previous controller to satisfy Mesh replay protection.",
+          "bind_models": "Bind AppKey index 0 to Generic OnOff Server 0x1000 and Generic Level Server 0x1002 before creating the entry."
         }
       },
       "confirm": {

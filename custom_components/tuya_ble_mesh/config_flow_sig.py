@@ -367,6 +367,10 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
                 vol.Optional(CONF_UNICAST_OUR, default="0001"): str,
                 vol.Optional(CONF_IV_INDEX, default=DEFAULT_IV_INDEX): int,
                 vol.Optional(CONF_ADAPTER, default="hci0"): str,
+                vol.Optional(CONF_INITIAL_SEQUENCE, default=0): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=0xFFFFFF)
+                ),
+                vol.Optional(CONF_BIND_MODELS, default=True): bool,
             }
         ),
         description_placeholders={

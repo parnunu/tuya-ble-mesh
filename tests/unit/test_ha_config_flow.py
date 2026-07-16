@@ -37,10 +37,12 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
 from custom_components.tuya_ble_mesh.const import (
     CONF_ADAPTER,
     CONF_APP_KEY,
+    CONF_BIND_MODELS,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
     CONF_DEV_KEY,
     CONF_DEVICE_TYPE,
+    CONF_INITIAL_SEQUENCE,
     CONF_IV_INDEX,
     CONF_MAC_ADDRESS,
     CONF_MESH_ADDRESS,
@@ -480,6 +482,20 @@ class TestSIGPlugStep:
 @pytest.mark.requires_ha
 class TestExistingSIGLightStep:
     """Test importing an already provisioned SIG Mesh lamp."""
+
+    @pytest.mark.asyncio
+    async def test_sig_light_form_exposes_sequence_and_binding_fields(self) -> None:
+        flow = _make_flow()
+        flow._discovery_info = {
+            "address": "02:00:00:00:00:01",
+            "name": "Existing SIG Mesh Light",
+        }
+
+        result = await flow.async_step_sig_light()
+
+        fields = {str(key.schema) for key in result["data_schema"].schema}
+        assert CONF_INITIAL_SEQUENCE in fields
+        assert CONF_BIND_MODELS in fields
 
     @pytest.mark.asyncio
     async def test_configure_binds_onoff_and_level_models(self) -> None:

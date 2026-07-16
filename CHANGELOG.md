@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.1] — 2026-07-16
+
+### Fixed
+- Expose replay-safe initial sequence and Generic OnOff/Level model-binding
+  controls in the existing SIG Mesh light config-flow form. This allows the
+  normal Home Assistant UI/REST flow to complete an existing-device migration.
+
+---
+
 ## [0.40.0] — 2026-07-16
 
 ### Added

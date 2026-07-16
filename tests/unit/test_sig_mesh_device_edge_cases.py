@@ -150,6 +150,7 @@ class TestConnectEdgeCases:
             dev._on_ble_disconnect,
         )
         client.connect.assert_awaited_once_with(pair=False)
+        assert client.start_notify.call_args.kwargs == {"bluez": {}}
         mock_scanner.find_device_by_address.assert_not_called()
 
     @pytest.mark.asyncio

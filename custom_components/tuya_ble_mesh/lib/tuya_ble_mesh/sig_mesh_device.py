@@ -459,7 +459,17 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
 
                     # Subscribe to Proxy Data Out notifications
                     try:
-                        await client.start_notify(self._proxy_data_out, self._on_notify)
+                        notify_kwargs: dict[str, Any] = {}
+                        if direct_bluez:
+                            # Low-level Bleak BlueZ backends expect the
+                            # backend-specific dictionary that BleakClient
+                            # normally supplies.
+                            notify_kwargs["bluez"] = {}
+                        await client.start_notify(
+                            self._proxy_data_out,
+                            self._on_notify,
+                            **notify_kwargs,
+                        )
                     except (EOFError, BleakError, BleakDBusError, OSError) as notify_exc:
                         _LOGGER.warning(
                             "Notification subscription failed for %s: %s (%s) — "

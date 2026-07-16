@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.3] — 2026-07-16
+
+### Fixed
+- Supply Bleak 3's required BlueZ notification options when using the direct
+  backend, preventing `KeyError('bluez')` after a successful connection.
+
+---
+
 ## [0.40.2] — 2026-07-16
 
 ### Fixed

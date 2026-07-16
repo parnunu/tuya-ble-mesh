@@ -120,21 +120,37 @@ class TestConnectEdgeCases:
         assert dev.is_connected is True
 
     @pytest.mark.asyncio
-    async def test_connect_with_adapter_forwards_to_scanner_and_client(self) -> None:
-        """Lines 314, 332: adapter kwarg passed to BleakScanner and BleakClient."""
+    async def test_connect_with_adapter_uses_direct_bluez_backend(self) -> None:
+        """An explicit adapter bypasses Home Assistant's global BLE wrappers."""
         dev = _dev(adapter="hci1")
         client = _mock_client()
+        direct_device = MagicMock()
 
         with (
+            patch(
+                "tuya_ble_mesh.sig_mesh_device._find_device_direct_bluez",
+                new=AsyncMock(return_value=direct_device),
+                create=True,
+            ) as find_direct,
+            patch(
+                "tuya_ble_mesh.sig_mesh_device._create_direct_bluez_client",
+                return_value=client,
+                create=True,
+            ) as create_direct,
             patch("tuya_ble_mesh.sig_mesh_device.BleakScanner") as mock_scanner,
-            patch("tuya_ble_mesh.sig_mesh_device.BleakClient", return_value=client) as mock_cls,
             patch.object(dev, "request_composition_data", new_callable=AsyncMock),
         ):
-            mock_scanner.find_device_by_address = AsyncMock(return_value=MagicMock())
             await dev.connect(max_retries=1)
 
-        assert mock_scanner.find_device_by_address.call_args.kwargs.get("adapter") == "hci1"
-        assert mock_cls.call_args.kwargs.get("adapter") == "hci1"
+        find_direct.assert_awaited_once_with(_MAC, "hci1", 30.0)
+        create_direct.assert_called_once_with(
+            direct_device,
+            "hci1",
+            30.0,
+            dev._on_ble_disconnect,
+        )
+        client.connect.assert_awaited_once_with(pair=False)
+        mock_scanner.find_device_by_address.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_connect_resolves_duplicate_proxy_characteristics_from_1828(self) -> None:

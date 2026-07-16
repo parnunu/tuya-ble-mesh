@@ -68,6 +68,55 @@ _BLUEZ_CACHE_CLEAR_DELAY = 2.0
 # Bluetoothctl remove command timeout (seconds)
 _BLUETOOTHCTL_REMOVE_TIMEOUT = 5.0
 
+
+async def _find_device_direct_bluez(
+    address: str, adapter: str, timeout: float
+) -> Any | None:
+    """Find one address using the selected BlueZ adapter without HA wrappers."""
+    from bleak.backends.bluezdbus.scanner import BleakScannerBlueZDBus
+
+    found: Any | None = None
+    discovered = asyncio.Event()
+
+    def _on_advertisement(device: Any, _advertisement: Any) -> None:
+        nonlocal found
+        if device.address.upper() == address.upper():
+            found = device
+            discovered.set()
+
+    scanner = BleakScannerBlueZDBus(
+        _on_advertisement,
+        None,
+        "active",
+        bluez={"adapter": adapter},
+    )
+    await scanner.start()
+    try:
+        async with asyncio.timeout(timeout):
+            await discovered.wait()
+    except TimeoutError:
+        return None
+    finally:
+        await scanner.stop()
+    return found
+
+
+def _create_direct_bluez_client(
+    device: Any,
+    adapter: str,
+    timeout: float,
+    disconnected_callback: Callable[[Any], None],
+) -> Any:
+    """Create a native BlueZ client without Home Assistant BLE wrappers."""
+    from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
+
+    return BleakClientBlueZDBus(
+        device,
+        bluez={"adapter": adapter},
+        timeout=timeout,
+        disconnected_callback=disconnected_callback,
+    )
+
 # Re-export for backward compatibility (tests import from here)
 __all__ = [
     "_REASSEMBLY_TIMEOUT",
@@ -354,7 +403,18 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         attempt,
                         max_retries,
                     )
-                    if self._ble_device_callback is not None:
+                    adapter = self._adapter
+                    direct_bluez = adapter is not None
+                    if direct_bluez:
+                        _LOGGER.debug(
+                            "Scanning directly for %s on BlueZ adapter %s",
+                            self._address,
+                            adapter,
+                        )
+                        device = await _find_device_direct_bluez(
+                            self._address, adapter, timeout
+                        )
+                    elif self._ble_device_callback is not None:
                         device = self._ble_device_callback(self._address)
                     else:
                         scan_kwargs: dict[str, Any] = {"timeout": timeout}
@@ -372,7 +432,15 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         msg = f"Device {self._address} not found"
                         raise MeshConnectionError(msg)
 
-                    if self._ble_connect_callback is not None:
+                    if direct_bluez:
+                        client = _create_direct_bluez_client(
+                            device,
+                            adapter,
+                            timeout,
+                            self._on_ble_disconnect,
+                        )
+                        await client.connect(pair=False)
+                    elif self._ble_connect_callback is not None:
                         client = await self._ble_connect_callback(device)
                         set_disconnect = getattr(client, "set_disconnected_callback", None)
                         if callable(set_disconnect):

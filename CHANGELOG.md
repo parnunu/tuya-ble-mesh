@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.2] — 2026-07-16
+
+### Fixed
+- Make an explicitly selected BlueZ adapter use Bleak's native BlueZ scanner
+  and client directly. This prevents Home Assistant's global Bluetooth router
+  from redirecting a room-dedicated adapter to unrelated devices or proxies.
+
+---
+
 ## [0.40.1] — 2026-07-16
 
 ### Fixed

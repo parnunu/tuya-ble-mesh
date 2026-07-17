@@ -159,6 +159,35 @@ class TestConnectEdgeCases:
         mock_scanner.find_device_by_address.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_empty_adapter_uses_ha_proxy_callbacks(self) -> None:
+        """An empty adapter must keep reconnects on HA's ESPHome proxy path."""
+        mock_device = MagicMock()
+        resolve_device = MagicMock(return_value=mock_device)
+        client = _mock_client()
+        connect_device = AsyncMock(return_value=client)
+        dev = _dev(
+            adapter="",
+            ble_device_callback=resolve_device,
+            ble_connect_callback=connect_device,
+        )
+
+        with (
+            patch(
+                "tuya_ble_mesh.sig_mesh_device._find_device_direct_bluez",
+                new_callable=AsyncMock,
+            ) as find_direct,
+            patch("tuya_ble_mesh.sig_mesh_device.BleakScanner") as scanner,
+            patch.object(dev, "request_composition_data", new_callable=AsyncMock),
+        ):
+            await dev.connect(max_retries=1)
+
+        resolve_device.assert_called_once_with(_MAC)
+        connect_device.assert_awaited_once_with(mock_device)
+        find_direct.assert_not_awaited()
+        scanner.find_device_by_address.assert_not_called()
+        assert dev.is_connected is True
+
+    @pytest.mark.asyncio
     async def test_connect_resolves_duplicate_proxy_characteristics_from_1828(self) -> None:
         """Select concrete 0x2ADD/0x2ADE handles from the Mesh Proxy service."""
         dev = _dev()

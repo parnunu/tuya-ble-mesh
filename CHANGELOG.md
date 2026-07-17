@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.9] — 2026-07-17
+
+### Fixed
+- Keep an empty adapter selection on Home Assistant's managed Bluetooth path
+  during reconnects. Previously, the empty value was treated as an explicit
+  BlueZ adapter and ESPHome proxy devices fell back to a conflicting local
+  scan after their first disconnect.
+
+---
+
 ## [0.40.8] — 2026-07-16
 
 ### Added

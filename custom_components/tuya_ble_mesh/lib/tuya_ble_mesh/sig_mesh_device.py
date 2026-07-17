@@ -414,7 +414,11 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         max_retries,
                     )
                     adapter = self._adapter
-                    direct_bluez = adapter is not None
+                    # Only an explicitly named adapter selects direct BlueZ.
+                    # An empty adapter is how HA-managed ESPHome proxy routing
+                    # is selected; treating it as direct BlueZ bypasses HA on
+                    # reconnect and attempts to start a second local scan.
+                    direct_bluez = bool(adapter)
                     if direct_bluez:
                         _LOGGER.debug(
                             "Scanning directly for %s on BlueZ adapter %s",
@@ -428,7 +432,7 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         device = self._ble_device_callback(self._address)
                     else:
                         scan_kwargs: dict[str, Any] = {"timeout": timeout}
-                        if self._adapter is not None:
+                        if self._adapter:
                             scan_kwargs["adapter"] = self._adapter
                         _LOGGER.debug(
                             "Scanning for %s (adapter=%s)",
@@ -460,7 +464,7 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                             "timeout": timeout,
                             "disconnected_callback": self._on_ble_disconnect,
                         }
-                        if self._adapter is not None:
+                        if self._adapter:
                             client_kwargs["adapter"] = self._adapter
                         client = BleakClient(device, **client_kwargs)
                         await client.connect()

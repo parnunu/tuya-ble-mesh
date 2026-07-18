@@ -246,6 +246,9 @@ class ProvisionerConnectionMixin:
                 return client
 
             except ProvisioningError:
+                if client is not None:
+                    with contextlib.suppress(BleakError, OSError, asyncio.TimeoutError):
+                        await client.disconnect()
                 raise
             except TimeoutError as exc:
                 last_exc = exc
@@ -288,14 +291,21 @@ class ProvisionerConnectionMixin:
 
                 if is_slot_error:
                     out_of_slots_failures += 1
-                    _LOGGER.warning(
-                        "Connect attempt %d/%d failed: BLE adapter out of connection slots. "
-                        "Cleaning up and waiting for slots to be released...",
-                        attempt,
-                        max_retries,
-                    )
-                    #  Force cleanup to free connection slot
-                    await self._cleanup_stale_connections(address)
+                    if self._ble_connect_callback is None:
+                        _LOGGER.warning(
+                            "Connect attempt %d/%d failed: BLE adapter out of connection "
+                            "slots. Cleaning up standalone BlueZ state and waiting...",
+                            attempt,
+                            max_retries,
+                        )
+                        await self._cleanup_stale_connections(address)
+                    else:
+                        _LOGGER.warning(
+                            "Connect attempt %d/%d failed: HA Bluetooth has no available "
+                            "connection slot. Waiting for Home Assistant to release a route...",
+                            attempt,
+                            max_retries,
+                        )
                     # Longer backoff when slots are exhausted
                     backoff = min(
                         _SLOTS_RETRY_BACKOFF_BASE

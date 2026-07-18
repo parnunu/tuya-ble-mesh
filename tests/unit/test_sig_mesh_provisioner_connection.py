@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from bleak import BleakError
 
 sys.path.insert(
     0,
@@ -177,6 +178,24 @@ class TestConnectAdapterPaths:
         assert client is mock_client
         assert mock_cls.call_args.kwargs.get("adapter") == "hci1"
 
+    @pytest.mark.asyncio
+    async def test_ha_managed_slot_error_does_not_call_bluetoothctl(self) -> None:
+        """HA-managed provisioning leaves route cleanup to Home Assistant."""
+        mock_device = MagicMock()
+        prov = _prov(
+            ble_device_callback=lambda _: mock_device,
+            ble_connect_callback=AsyncMock(side_effect=BleakError("out of connection slots")),
+        )
+
+        with (
+            patch.object(prov, "_cleanup_stale_connections", new_callable=AsyncMock) as cleanup,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(ProvisioningError, match="out of connection slots"),
+        ):
+            await prov._connect(_MAC, timeout=5.0, max_retries=1)
+
+        cleanup.assert_not_awaited()
+
 
 class TestConnectCallbackNone:
     """Line 215: ble_connect_callback returning None → ProvisioningError."""
@@ -218,6 +237,23 @@ class TestConnectClientServicesFallback:
 
 class TestConnectClientDisconnectOnError:
     """Lines 261-263 and 285-287: client disconnected when connect error occurs."""
+
+    @pytest.mark.asyncio
+    async def test_provisioning_error_disconnects_connected_client(self) -> None:
+        """Service validation failure must release an already-connected client."""
+        wrong_service = MagicMock()
+        wrong_service.uuid = "00001828-0000-1000-8000-00805f9b34fb"
+        mock_client = _connected_client()
+        mock_client.get_services.return_value = [wrong_service]
+        prov = _prov(
+            ble_device_callback=MagicMock(return_value=MagicMock()),
+            ble_connect_callback=AsyncMock(return_value=mock_client),
+        )
+
+        with pytest.raises(ProvisioningError, match="does not expose Provisioning Service"):
+            await prov._connect(_MAC, timeout=5.0, max_retries=1)
+
+        mock_client.disconnect.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_timeout_disconnects_existing_client(self) -> None:

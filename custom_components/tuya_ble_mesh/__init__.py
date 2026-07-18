@@ -79,6 +79,15 @@ else:
     TuyaBLEMeshConfigEntry = ConfigEntry
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) -> bool:
+    """Migrate legacy direct-adapter entries to HA-managed Bluetooth."""
+    if entry.version == 1:
+        data = dict(entry.data)
+        data.pop(CONF_ADAPTER, None)
+        hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) -> bool:
     """Set up Tuya BLE Mesh from a config entry.
 
@@ -103,32 +112,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) 
 
     # Register the target before the first connection attempt. Address-specific
     # ACTIVE callbacks make HA's AUTO-mode ESPHome proxies scan on demand.
-    if not entry.data.get(CONF_ADAPTER):
-
-        def _on_ble_device_found(service_info: Any, change: Any) -> None:
-            if coordinator is not None and not coordinator.state.available:
-                _LOGGER.debug(
-                    "BLE device %s reappeared (RSSI: %s) — triggering reconnect",
-                    service_info.address,
-                    service_info.rssi,
-                )
-                coordinator.schedule_reconnect()
-
-        try:
-            entry.async_on_unload(
-                register_ha_active_scan(hass, mac_address, _on_ble_device_found)
-            )
-            _LOGGER.debug("BLE active-scan callback registered for %s", mac_address)
-        except ImportError:
+    def _on_ble_device_found(service_info: Any, change: Any) -> None:
+        if coordinator is not None and not coordinator.state.available:
             _LOGGER.debug(
-                "Bluetooth integration not available, skipping active-scan callback"
+                "BLE device %s reappeared (RSSI: %s) — triggering reconnect",
+                service_info.address,
+                service_info.rssi,
             )
+            coordinator.schedule_reconnect()
+
+    try:
+        entry.async_on_unload(register_ha_active_scan(hass, mac_address, _on_ble_device_found))
+        _LOGGER.debug("BLE active-scan callback registered for %s", mac_address)
+    except ImportError:
+        _LOGGER.debug("Bluetooth integration not available, skipping active-scan callback")
 
     # BLE Proxy support: use HA's bluetooth stack to find devices
     # This routes through all available BLE adapters and ESPHome proxies
-    _ble_device_from_ha, _ble_connect_via_ha = create_ha_ble_callbacks(
-        hass, entry.title
-    )
+    _ble_device_from_ha, _ble_connect_via_ha = create_ha_ble_callbacks(hass, entry.title)
     sequence_store = get_ha_sequence_store(hass, entry.data)
 
     # PLAT-739: Gracefully handle missing provisioning keys for SIG Mesh devices
@@ -243,7 +244,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: TuyaBLEMeshConfigEntry) 
 
     # Reload entry when options are changed
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-
 
     # PLAT-759: Routine setup completion at DEBUG level
     _LOGGER.debug("Tuya BLE Mesh entry set up: %s", entry.title)

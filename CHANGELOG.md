@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.41.0] — 2026-07-18
+
+### Changed
+- Route every Home Assistant Bluetooth connection through HA's managed Bluetooth
+  API, allowing HA to select a local adapter or ESPHome Bluetooth proxy.
+- Remove direct adapter selection from setup, options, and reconfigure flows.
+- Migrate version 1 config entries by removing the legacy `adapter` field.
+
+### Fixed
+- Prevent HA-managed connection and provisioning failures from invoking
+  `bluetoothctl` or manipulating the local BlueZ cache outside Home Assistant.
+- Route post-provision SIG Mesh configuration through the same HA-managed
+  Bluetooth callbacks as the provisioning exchange.
+- Disconnect failed HA-managed clients before retrying so local adapters and
+  ESPHome proxies do not leak connection slots.
+
+---
+
 ## [0.40.9] — 2026-07-17
 
 ### Fixed

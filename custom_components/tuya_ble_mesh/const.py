@@ -17,6 +17,7 @@ PLATFORMS: list[Platform] = [
 
 # Config entry data keys
 CONF_DEVICE_TYPE = "device_type"
+# Deprecated v1 field kept only for migration and defensive cleanup.
 CONF_ADAPTER = "adapter"
 DEVICE_TYPE_LIGHT = "light"
 DEVICE_TYPE_PLUG = "plug"

@@ -16,6 +16,7 @@ sys.path.insert(0, _ROOT)
 sys.path.insert(0, str(Path(_ROOT) / "custom_components" / "tuya_ble_mesh" / "lib"))
 
 from custom_components.tuya_ble_mesh import (  # noqa: E402
+    async_migrate_entry,
     async_remove_config_entry_device,
     async_setup_entry,
     async_unload_entry,
@@ -96,6 +97,29 @@ def _make_patches() -> tuple[MagicMock, MagicMock]:
 
 
 @pytest.mark.requires_ha
+class TestConfigEntryMigration:
+    """Test migration to Home Assistant-managed Bluetooth routing."""
+
+    @pytest.mark.asyncio
+    async def test_v1_entry_drops_legacy_adapter(self) -> None:
+        hass = make_mock_hass()
+        entry = make_mock_entry()
+        entry.version = 1
+        entry.data["adapter"] = "hci0"
+
+        result = await async_migrate_entry(hass, entry)
+
+        assert result is True
+        expected_data = dict(entry.data)
+        expected_data.pop("adapter")
+        hass.config_entries.async_update_entry.assert_called_once_with(
+            entry,
+            data=expected_data,
+            version=2,
+        )
+
+
+@pytest.mark.requires_ha
 class TestAsyncSetupEntry:
     """Test async_setup_entry."""
 
@@ -143,9 +167,7 @@ class TestAsyncSetupEntry:
         mock_coord.async_initial_connect.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_setup_registers_target_scan_before_connect(
-        self, mock_ha_bluetooth: Any
-    ) -> None:
+    async def test_setup_registers_target_scan_before_connect(self, mock_ha_bluetooth: Any) -> None:
         """AUTO-mode proxies must be activated before initial connection."""
         hass = make_mock_hass()
         entry = make_mock_entry()
@@ -166,6 +188,26 @@ class TestAsyncSetupEntry:
             await async_setup_entry(hass, entry)
 
         assert events[:2] == ["scan", "connect"]
+        assert register_scan.call_args.args[1] == "DC:23:4D:21:43:A5"
+
+    @pytest.mark.asyncio
+    async def test_setup_registers_ha_scan_for_legacy_adapter_entry(
+        self, mock_ha_bluetooth: Any
+    ) -> None:
+        """Legacy adapter data must not suppress HA-managed discovery."""
+        hass = make_mock_hass()
+        entry = make_mock_entry()
+        entry.data["adapter"] = "hci0"
+        mock_device, mock_coord = _make_patches()
+        register_scan, _cancel = mock_ha_bluetooth
+
+        with (
+            patch(_PATCH_MESH_DEVICE, return_value=mock_device),
+            patch(_PATCH_COORDINATOR, return_value=mock_coord),
+        ):
+            await async_setup_entry(hass, entry)
+
+        register_scan.assert_called_once()
         assert register_scan.call_args.args[1] == "DC:23:4D:21:43:A5"
 
     @pytest.mark.asyncio

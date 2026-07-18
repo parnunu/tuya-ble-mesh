@@ -94,7 +94,9 @@ async def async_step_reconfigure(flow: Any, user_input: dict[str, Any] | None = 
                     errors[CONF_MESH_PASSWORD] = pass_error
 
         if not errors:
-            flow.hass.config_entries.async_update_entry(entry, data={**entry.data, **user_input})
+            data = {**entry.data, **user_input}
+            data.pop(CONF_ADAPTER, None)
+            flow.hass.config_entries.async_update_entry(entry, data=data)
             await flow.hass.config_entries.async_reload(entry.entry_id)
             return flow.async_abort(reason="reconfigure_successful")
 
@@ -114,19 +116,15 @@ async def async_step_reconfigure(flow: Any, user_input: dict[str, Any] | None = 
         )
     elif device_type in (DEVICE_TYPE_SIG_PLUG, DEVICE_TYPE_SIG_LIGHT):
         schema_dict: dict[object, object] = {
-                vol.Optional(
-                    CONF_UNICAST_TARGET,
-                    default=entry.data.get(CONF_UNICAST_TARGET, "00B0"),
-                ): str,
-                vol.Optional(
-                    CONF_IV_INDEX,
-                    default=entry.data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX),
-                ): int,
+            vol.Optional(
+                CONF_UNICAST_TARGET,
+                default=entry.data.get(CONF_UNICAST_TARGET, "00B0"),
+            ): str,
+            vol.Optional(
+                CONF_IV_INDEX,
+                default=entry.data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX),
+            ): int,
         }
-        if device_type == DEVICE_TYPE_SIG_LIGHT:
-            schema_dict[
-                vol.Optional(CONF_ADAPTER, default=entry.data.get(CONF_ADAPTER, "hci0"))
-            ] = str
         schema = vol.Schema(schema_dict)
     else:
         schema = vol.Schema(

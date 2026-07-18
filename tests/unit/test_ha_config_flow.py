@@ -182,7 +182,7 @@ class TestConfigFlowInit:
 
     def test_version(self) -> None:
         flow = _make_flow()
-        assert flow.VERSION == 1
+        assert flow.VERSION == 2
 
     def test_async_get_options_flow(self) -> None:
         """async_get_options_flow returns TuyaBLEMeshOptionsFlow instance."""
@@ -551,9 +551,7 @@ class TestExistingSIGLightStep:
         device = MagicMock()
         composition_callbacks: list[Any] = []
         device.register_composition_callback.side_effect = composition_callbacks.append
-        composition = MagicMock(
-            raw_elements=struct.pack("<HBBHH", 0, 2, 0, 0x1000, 0x1002)
-        )
+        composition = MagicMock(raw_elements=struct.pack("<HBBHH", 0, 2, 0, 0x1000, 0x1002))
 
         async def _connect(**_kwargs: Any) -> None:
             composition_callbacks[0](composition)
@@ -669,14 +667,13 @@ class TestExistingSIGLightStep:
                 CONF_UNICAST_TARGET: "00B0",
                 CONF_UNICAST_OUR: "0001",
                 CONF_IV_INDEX: 0,
-                CONF_ADAPTER: "hci0",
             }
         )
 
         assert result["type"] == "create_entry"
         assert result["data"][CONF_DEVICE_TYPE] == DEVICE_TYPE_SIG_LIGHT
         assert result["data"][CONF_MAC_ADDRESS] == "02:00:00:00:00:01"
-        assert result["data"][CONF_ADAPTER] == "hci0"
+        assert CONF_ADAPTER not in result["data"]
         assert result["data"][CONF_NET_KEY] == _TEST_NET_KEY
 
     @pytest.mark.asyncio
@@ -698,7 +695,10 @@ class TestExistingSIGLightStep:
         result = await flow.async_step_import(import_data)
 
         assert result["type"] == "create_entry"
-        assert result["data"] == import_data
+        assert CONF_ADAPTER not in result["data"]
+        assert result["data"] == {
+            key: value for key, value in import_data.items() if key != CONF_ADAPTER
+        }
 
     @pytest.mark.asyncio
     async def test_import_can_bind_light_models_and_advance_sequence(self) -> None:
@@ -1527,14 +1527,19 @@ class TestRunProvision:
         mock_device.send_config_app_key_add = AsyncMock(return_value=True)
         mock_device.send_config_model_app_bind = AsyncMock(return_value=True)
 
-        # Capture the callbacks passed to SIGMeshProvisioner
-        captured_provisioner_kwargs = {}
+        # Capture the callbacks passed to provisioning and post-provision config.
+        captured_provisioner_kwargs: dict[str, Any] = {}
+        captured_device_kwargs: dict[str, Any] = {}
 
         def capture_provisioner_init(**kwargs: Any) -> MagicMock:
             captured_provisioner_kwargs.update(kwargs)
             mock_provisioner = MagicMock()
             mock_provisioner.provision = AsyncMock(return_value=mock_prov_result)
             return mock_provisioner
+
+        def capture_device_init(*_args: Any, **kwargs: Any) -> MagicMock:
+            captured_device_kwargs.update(kwargs)
+            return mock_device
 
         # Mock establish_connection to avoid real BLE calls
         mock_client = MagicMock()
@@ -1548,14 +1553,25 @@ class TestRunProvision:
                 "tuya_ble_mesh.sig_mesh_provisioner.SIGMeshProvisioner",
                 side_effect=capture_provisioner_init,
             ),
-            patch("tuya_ble_mesh.sig_mesh_device.SIGMeshDevice", return_value=mock_device),
+            patch(
+                "tuya_ble_mesh.sig_mesh_device.SIGMeshDevice",
+                side_effect=capture_device_init,
+            ),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             await run_provision(flow.hass, "AA:BB:CC:DD:EE:FF")
 
-        # Verify callbacks were passed
+        # Both provisioning phases must use the same HA-managed Bluetooth route.
         assert "ble_device_callback" in captured_provisioner_kwargs
         assert "ble_connect_callback" in captured_provisioner_kwargs
+        assert (
+            captured_device_kwargs["ble_device_callback"]
+            is captured_provisioner_kwargs["ble_device_callback"]
+        )
+        assert (
+            captured_device_kwargs["ble_connect_callback"]
+            is captured_provisioner_kwargs["ble_connect_callback"]
+        )
 
         # Test the callbacks
         ble_device_cb = captured_provisioner_kwargs["ble_device_callback"]
@@ -1716,6 +1732,22 @@ class TestOptionsFlowInit:
         assert CONF_IV_INDEX not in schema_keys
 
     @pytest.mark.asyncio
+    async def test_sig_light_hides_legacy_adapter_option(self) -> None:
+        """Options flow must not offer direct adapter selection."""
+        flow = _make_options_flow(
+            DEVICE_TYPE_SIG_LIGHT,
+            {CONF_ADAPTER: "hci0", CONF_UNICAST_TARGET: "00B0", CONF_IV_INDEX: 0},
+            advanced=True,
+        )
+
+        result = await flow.async_step_init(None)
+
+        schema_keys = [str(key) for key in result["data_schema"].schema]
+        assert CONF_ADAPTER not in schema_keys
+        assert CONF_UNICAST_TARGET in schema_keys
+        assert CONF_IV_INDEX in schema_keys
+
+    @pytest.mark.asyncio
     async def test_light_shows_mesh_credentials_always(self) -> None:
         """Light type always shows mesh_name and mesh_password."""
         flow = _make_options_flow(DEVICE_TYPE_LIGHT)
@@ -1779,6 +1811,27 @@ class TestOptionsFlowSubmit:
         flow.hass.config_entries.async_update_entry.assert_called_once()
         call_kwargs = flow.hass.config_entries.async_update_entry.call_args
         new_data = call_kwargs[1]["data"]
+        assert new_data[CONF_UNICAST_TARGET] == "00C0"
+        assert new_data[CONF_IV_INDEX] == 1
+
+    @pytest.mark.asyncio
+    async def test_submit_sig_light_options_drops_legacy_adapter(self) -> None:
+        """Saving SIG light options must remove stale direct-adapter data."""
+        flow = _make_options_flow(
+            DEVICE_TYPE_SIG_LIGHT,
+            {
+                CONF_ADAPTER: "hci0",
+                CONF_UNICAST_TARGET: "00B0",
+                CONF_IV_INDEX: 0,
+            },
+            advanced=True,
+        )
+
+        result = await flow.async_step_init({CONF_UNICAST_TARGET: "00C0", CONF_IV_INDEX: 1})
+
+        assert result["type"] == "create_entry"
+        new_data = flow.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        assert CONF_ADAPTER not in new_data
         assert new_data[CONF_UNICAST_TARGET] == "00C0"
         assert new_data[CONF_IV_INDEX] == 1
 
@@ -2644,6 +2697,50 @@ class TestReconfigureFlow:
         result = await flow.async_step_reconfigure(None)
         assert result["type"] == "form"
         assert result["step_id"] == "reconfigure"
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_sig_light_hides_legacy_adapter(self) -> None:
+        """SIG light reconfigure must not expose direct adapter selection."""
+        flow = _make_reconfigure_flow(
+            DEVICE_TYPE_SIG_LIGHT,
+            entry_data={
+                CONF_MAC_ADDRESS: "AA:BB:CC:DD:EE:FF",
+                CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
+                CONF_UNICAST_TARGET: "00B0",
+                CONF_IV_INDEX: 0,
+                CONF_ADAPTER: "hci0",
+            },
+        )
+
+        result = await flow.async_step_reconfigure(None)
+
+        schema_keys = {key.schema for key in result["data_schema"].schema}
+        assert CONF_ADAPTER not in schema_keys
+
+    @pytest.mark.asyncio
+    async def test_reconfigure_sig_light_drops_legacy_adapter_data(self) -> None:
+        """Successful reconfigure must remove stale direct-adapter data."""
+        flow = _make_reconfigure_flow(
+            DEVICE_TYPE_SIG_LIGHT,
+            entry_data={
+                CONF_MAC_ADDRESS: "AA:BB:CC:DD:EE:FF",
+                CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
+                CONF_UNICAST_TARGET: "00B0",
+                CONF_IV_INDEX: 0,
+                CONF_ADAPTER: "hci0",
+            },
+        )
+        entry = flow.hass.config_entries.async_get_entry.return_value
+
+        result = await flow.async_step_reconfigure({CONF_UNICAST_TARGET: "00C0", CONF_IV_INDEX: 1})
+
+        assert result["reason"] == "reconfigure_successful"
+        updated_data = flow.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        assert CONF_ADAPTER not in updated_data
+        assert updated_data[CONF_UNICAST_TARGET] == "00C0"
+        assert updated_data[CONF_IV_INDEX] == 1
+        flow.hass.config_entries.async_update_entry.assert_called_once()
+        assert entry is flow.hass.config_entries.async_get_entry.return_value
 
     @pytest.mark.asyncio
     async def test_reconfigure_direct_ble_success(self) -> None:

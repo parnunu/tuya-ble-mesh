@@ -164,8 +164,10 @@ class SIGMeshProvisioner(ProvisionerConnectionMixin, ProvisionerExchangeMixin): 
             ProvisioningError: If provisioning fails at any step.
         """
         async with mesh_operation(address.upper(), "provision"):
-            #  Force cleanup of any stale BLE connections before provisioning
-            await self._cleanup_stale_connections(address)
+            # HA-managed connectors own their Bluetooth route and must not be
+            # manipulated through the host's local bluetoothctl instance.
+            if self._ble_connect_callback is None:
+                await self._cleanup_stale_connections(address)
 
             client = await self._connect(address, timeout, max_retries)
             try:

@@ -69,9 +69,7 @@ _BLUEZ_CACHE_CLEAR_DELAY = 2.0
 _BLUETOOTHCTL_REMOVE_TIMEOUT = 5.0
 
 
-async def _find_device_direct_bluez(
-    address: str, adapter: str, timeout: float
-) -> Any | None:
+async def _find_device_direct_bluez(address: str, adapter: str, timeout: float) -> Any | None:
     """Find one address using the selected BlueZ adapter without HA wrappers."""
     from bleak.backends.bluezdbus.scanner import BleakScannerBlueZDBus
 
@@ -116,6 +114,7 @@ def _create_direct_bluez_client(
         timeout=timeout,
         disconnected_callback=disconnected_callback,
     )
+
 
 # Re-export for backward compatibility (tests import from here)
 __all__ = [
@@ -226,9 +225,7 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
         """
         self._address = address.upper()
         self._target_addr = target_addr
-        self._level_target_addr = (
-            target_addr if level_target_addr is None else level_target_addr
-        )
+        self._level_target_addr = target_addr if level_target_addr is None else level_target_addr
         self._brightness_model_id = brightness_model_id
         self._our_addr = our_addr
         self._secrets = secrets
@@ -406,6 +403,11 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
 
             last_error: Exception | None = None
             for attempt in range(1, max_retries + 1):
+                # Only an explicitly named adapter selects standalone direct
+                # BlueZ. Home Assistant entries never provide one.
+                adapter = self._adapter
+                direct_bluez = bool(adapter)
+                client: BleakClient | None = None
                 try:
                     _LOGGER.info(
                         "Connecting to %s (attempt %d/%d)",
@@ -413,21 +415,13 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         attempt,
                         max_retries,
                     )
-                    adapter = self._adapter
-                    # Only an explicitly named adapter selects direct BlueZ.
-                    # An empty adapter is how HA-managed ESPHome proxy routing
-                    # is selected; treating it as direct BlueZ bypasses HA on
-                    # reconnect and attempts to start a second local scan.
-                    direct_bluez = bool(adapter)
-                    if direct_bluez:
+                    if adapter:
                         _LOGGER.debug(
                             "Scanning directly for %s on BlueZ adapter %s",
                             self._address,
                             adapter,
                         )
-                        device = await _find_device_direct_bluez(
-                            self._address, adapter, timeout
-                        )
+                        device = await _find_device_direct_bluez(self._address, adapter, timeout)
                     elif self._ble_device_callback is not None:
                         device = self._ble_device_callback(self._address)
                     else:
@@ -446,7 +440,7 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         msg = f"Device {self._address} not found"
                         raise MeshConnectionError(msg)
 
-                    if direct_bluez:
+                    if adapter:
                         client = _create_direct_bluez_client(
                             device,
                             adapter,
@@ -525,8 +519,14 @@ class SIGMeshDevice(SIGMeshDeviceCommandsMixin, SIGMeshDeviceSegmentsMixin):  # 
                         self._address,
                         exc_info=True,
                     )
-                    # Remove cached BLE device between retries
-                    await self._bluetoothctl_remove()
+                    if client is not None:
+                        with contextlib.suppress(BleakError, OSError):
+                            await client.disconnect()
+                    # Only standalone direct-BlueZ mode owns the local cache.
+                    # HA-managed adapters and ESPHome proxies must be cleaned up
+                    # through Home Assistant's Bluetooth stack.
+                    if direct_bluez:
+                        await self._bluetoothctl_remove()
                     await asyncio.sleep(_BLUEZ_CACHE_CLEAR_DELAY)
 
             msg = f"Failed to connect to {self._address} after {max_retries} attempts"

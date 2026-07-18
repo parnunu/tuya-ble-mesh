@@ -10,7 +10,6 @@ import logging
 from typing import TYPE_CHECKING, Any, TypeAlias, Union
 
 from custom_components.tuya_ble_mesh.const import (
-    CONF_ADAPTER,
     CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
@@ -136,18 +135,10 @@ def _create_sig_plug(
         )
 
     target_addr = int(data.get(CONF_UNICAST_TARGET, "00B0"), 16)
-    level_target_addr = int(
-        data.get(CONF_LEVEL_UNICAST_TARGET, f"{target_addr:04X}"), 16
-    )
+    level_target_addr = int(data.get(CONF_LEVEL_UNICAST_TARGET, f"{target_addr:04X}"), 16)
     brightness_model_id = int(data.get(CONF_BRIGHTNESS_MODEL_ID, 0x1002))
     our_addr = int(data.get(CONF_UNICAST_OUR, "0001"), 16)
     iv_index: int = data.get(CONF_IV_INDEX, DEFAULT_IV_INDEX)
-    adapter = data.get(CONF_ADAPTER)
-    if adapter:
-        # A direct adapter entry intentionally owns the local BlueZ adapter
-        # instead of depending on HA's Bluetooth scanner registry.
-        ble_device_callback = None
-        ble_connect_callback = None
 
     target_hex = f"{target_addr:04x}"
     op_prefix = "cfg"
@@ -169,7 +160,6 @@ def _create_sig_plug(
         seq_store=seq_store,
         ble_device_callback=ble_device_callback,
         ble_connect_callback=ble_connect_callback,
-        adapter=adapter,
     )
     device.set_seq(int(data.get(CONF_INITIAL_SEQUENCE, 0)))
     return device

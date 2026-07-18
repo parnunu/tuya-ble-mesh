@@ -100,8 +100,9 @@ class TuyaBLEMeshOptionsFlow(config_entries.OptionsFlow):
                         errors[CONF_MESH_PASSWORD] = pass_error
 
             if not errors:
-                # Merge new data into config entry
+                # Merge new data and discard obsolete direct-adapter ownership.
                 new_data = {**self._config_entry.data, **user_input}
+                new_data.pop(CONF_ADAPTER, None)
                 self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
                 return self.async_create_entry(title="", data={})
 
@@ -134,14 +135,7 @@ class TuyaBLEMeshOptionsFlow(config_entries.OptionsFlow):
                     )
                 ] = str
         elif device_type in (DEVICE_TYPE_SIG_PLUG, DEVICE_TYPE_SIG_LIGHT):
-            if device_type == DEVICE_TYPE_SIG_LIGHT:
-                schema_dict[
-                    vol.Optional(
-                        CONF_ADAPTER,
-                        default=self._config_entry.data.get(CONF_ADAPTER, "hci0"),
-                    )
-                ] = str
-            # Direct SIG Mesh: unicast and iv_index are advanced network settings
+            # SIG Mesh addressing fields are advanced network settings.
             if self.show_advanced_options:
                 schema_dict[
                     vol.Optional(

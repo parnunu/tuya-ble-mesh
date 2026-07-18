@@ -188,6 +188,25 @@ class TestConnectEdgeCases:
         assert dev.is_connected is True
 
     @pytest.mark.asyncio
+    async def test_ha_managed_failure_does_not_call_bluetoothctl(self) -> None:
+        """HA-managed retries must not manipulate BlueZ outside Home Assistant."""
+        resolve_device = MagicMock(return_value=None)
+        dev = _dev(
+            adapter="",
+            ble_device_callback=resolve_device,
+            ble_connect_callback=AsyncMock(),
+        )
+
+        with (
+            patch.object(dev, "_bluetoothctl_remove", new_callable=AsyncMock) as remove,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(MeshConnectionError, match="after 1 attempts"),
+        ):
+            await dev.connect(max_retries=1)
+
+        remove.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_connect_resolves_duplicate_proxy_characteristics_from_1828(self) -> None:
         """Select concrete 0x2ADD/0x2ADE handles from the Mesh Proxy service."""
         dev = _dev()
@@ -196,8 +215,8 @@ class TestConnectEdgeCases:
         proxy_service.uuid = "00001828-0000-1000-8000-00805f9b34fb"
         data_in = MagicMock(name="mesh_proxy_data_in")
         data_out = MagicMock(name="mesh_proxy_data_out")
-        proxy_service.get_characteristic.side_effect = (
-            lambda uuid: data_in if uuid.endswith("2add-0000-1000-8000-00805f9b34fb") else data_out
+        proxy_service.get_characteristic.side_effect = lambda uuid: (
+            data_in if uuid.endswith("2add-0000-1000-8000-00805f9b34fb") else data_out
         )
         client.services.get_service.return_value = proxy_service
 
@@ -209,12 +228,32 @@ class TestConnectEdgeCases:
             mock_scanner.find_device_by_address = AsyncMock(return_value=MagicMock())
             await dev.connect(max_retries=1)
 
-        client.services.get_service.assert_called_once_with(
-            "00001828-0000-1000-8000-00805f9b34fb"
-        )
+        client.services.get_service.assert_called_once_with("00001828-0000-1000-8000-00805f9b34fb")
         assert dev._proxy_data_in is data_in
         assert dev._proxy_data_out is data_out
         assert client.start_notify.call_args.args[0] is data_out
+
+    @pytest.mark.asyncio
+    async def test_ha_client_disconnected_when_proxy_service_resolution_fails(self) -> None:
+        """A failed HA connection attempt must release its connected client."""
+        mock_device = MagicMock()
+        client = _mock_client()
+        client.services.get_service.return_value = None
+        dev = _dev(
+            ble_device_callback=MagicMock(return_value=mock_device),
+            ble_connect_callback=AsyncMock(return_value=client),
+        )
+
+        with (
+            patch.object(dev, "_bluetoothctl_remove", new_callable=AsyncMock) as remove,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(MeshConnectionError, match="after 1 attempts"),
+        ):
+            await dev.connect(max_retries=1)
+
+        client.disconnect.assert_awaited_once()
+        remove.assert_not_awaited()
+        assert dev._client is None
 
     @pytest.mark.asyncio
     async def test_connect_device_not_found_raises(self) -> None:

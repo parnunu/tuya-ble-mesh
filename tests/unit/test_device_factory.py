@@ -18,8 +18,8 @@ from custom_components.tuya_ble_mesh.const import (
 from custom_components.tuya_ble_mesh.device_factory import create_device
 
 
-def test_sig_light_direct_adapter_bypasses_ha_bluetooth_callbacks() -> None:
-    """A dedicated adapter must not use HA scanner/connect callbacks."""
+def test_sig_light_legacy_adapter_uses_ha_bluetooth_callbacks() -> None:
+    """Legacy adapter data must not bypass Home Assistant Bluetooth routing."""
     data = {
         CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
         CONF_ADAPTER: "hci0",
@@ -43,13 +43,13 @@ def test_sig_light_direct_adapter_bypasses_ha_bluetooth_callbacks() -> None:
         )
 
     kwargs = device_cls.call_args.kwargs
-    assert kwargs["adapter"] == "hci0"
-    assert kwargs["ble_device_callback"] is None
-    assert kwargs["ble_connect_callback"] is None
+    assert "adapter" not in kwargs
+    assert kwargs["ble_device_callback"] is ha_device_callback
+    assert kwargs["ble_connect_callback"] is ha_connect_callback
 
 
-def test_sig_light_direct_adapter_constructs_real_device() -> None:
-    """The real SIGMeshDevice constructor must accept factory callback wiring."""
+def test_sig_light_legacy_adapter_constructs_ha_managed_device() -> None:
+    """Legacy adapter data must not select the direct BlueZ backend."""
     data = {
         CONF_DEVICE_TYPE: DEVICE_TYPE_SIG_LIGHT,
         CONF_ADAPTER: "hci0",
@@ -72,3 +72,4 @@ def test_sig_light_direct_adapter_constructs_real_device() -> None:
 
     assert device.address == "02:00:00:00:00:01"
     assert device.get_seq() == 41
+    assert device._adapter is None

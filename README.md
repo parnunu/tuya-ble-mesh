@@ -2,15 +2,15 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?logo=homeassistantcommunitystore)](https://github.com/hacs/integration)
 [![CI](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/parnunu/tuya-ble-mesh/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.40.9-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.41.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![HA 2024.1+](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/parnunu/tuya-ble-mesh/actions)
 
 A fully local Home Assistant integration for controlling Tuya BLE Mesh devices. No cloud. No Tuya account required for daily use.
 
-This fork adds HACS-packaged direct control for already-provisioned SIG Mesh
-Generic On/Off and Generic Level lights using a dedicated local BlueZ adapter.
+This fork adds HACS-packaged control for already-provisioned SIG Mesh Generic
+On/Off and Generic Level lights through Home Assistant's managed Bluetooth stack.
 
 ## What is this?
 
@@ -30,22 +30,15 @@ Home Assistant  ←HTTP→  Bridge Daemon (RPi)  ←BLE Mesh→  Devices
 2. The HA integration communicates with the bridge over your local network
 3. The bridge translates commands to/from the BLE mesh protocol
 
-**Mode 2: ESPHome BLE Proxy**
+**Mode 2: Home Assistant-managed Bluetooth**
 ```
-Home Assistant  ←API→  ESPHome BLE Proxy  ←BLE Mesh→  Devices
+Home Assistant integration  →  HA Bluetooth API  →  local adapter or ESPHome proxy  →  Device
 ```
-For SIG Mesh devices, any ESPHome device with BLE proxy enabled can be used instead of a dedicated RPi. This is simpler to set up and doesn't require a separate bridge daemon.
-
-**Mode 3: Direct local BlueZ adapter (existing SIG Mesh lights)**
-```
-Home Assistant custom integration  ←BlueZ/hci0→  SIG Mesh Light
-```
-Already-provisioned Generic On/Off and Generic Level lights can be imported with their NetKey,
-DevKey, AppKey, unicast addresses, and IV index. The selected adapter is owned
-directly by this integration; do not let another process own the same adapter.
-
-Bridge and proxy modes do not require Bluetooth hardware on Home Assistant.
-Direct mode requires a dedicated local BlueZ adapter.
+For direct BLE and SIG Mesh devices, the integration resolves and connects through
+Home Assistant's Bluetooth API. Home Assistant selects either a managed local
+adapter or an active ESPHome Bluetooth proxy based on reachability, signal quality,
+connection failures, and available connection slots. The integration never owns a
+local BlueZ adapter directly.
 
 ## Tested Devices
 
@@ -76,9 +69,9 @@ Devices using the Tuya BLE Mesh / Telink stack with service UUID `fe07`:
 
 ### Connectivity
 - **Auto-discovery** — finds `out_of_mesh*` and `tymesh*` devices via BLE
-- **HA Bluetooth integration** — uses Home Assistant's native Bluetooth API (no adapter conflicts)
-- **Dedicated local adapter mode** — direct BlueZ ownership for imported SIG Mesh lights
-- **ESPHome BLE proxy** — use any ESPHome device as a BLE bridge (SIG Mesh)
+- **HA Bluetooth integration** — Home Assistant owns and selects every Bluetooth path
+- **Managed local adapters** — use local USB/Bluetooth adapters registered with HA
+- **ESPHome BLE proxy** — HA can route active GATT connections through ESPHome
 - **Auto-reconnect** — exponential backoff (5s → 5min) on connection loss
 - **Keep-alive** — maintains BLE connections proactively to minimize latency
 - **Command queue** — delivery with TTL and retry under rapid HA automations
@@ -134,10 +127,11 @@ The integration will scan for nearby BLE Mesh devices automatically. Select your
 
 For an already-provisioned SIG Mesh lamp, select **Existing SIG Mesh Light
 (On/Off + Brightness)** and enter its 32-hex-character NetKey, DevKey, AppKey, device and
-controller unicast addresses, IV index, and dedicated BlueZ adapter (normally
-`hci0`). These credentials remain in Home Assistant's local config-entry
-storage, which is not encrypted. Protect the HA config directory and backups.
-The credentials are not sent to a cloud service.
+controller unicast addresses, and IV index. Home Assistant automatically chooses a
+managed local Bluetooth adapter or active ESPHome proxy that can reach the lamp.
+These credentials remain in Home Assistant's local config-entry storage, which is
+not encrypted. Protect the HA config directory and backups. The credentials are
+not sent to a cloud service.
 
 Advanced import/migration tooling can also provide an `initial_sequence` value
 and `bind_models: true`. This resumes above prior commissioning traffic and

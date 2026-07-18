@@ -7,10 +7,11 @@ Bluetooth manager so AUTO-mode ESPHome proxies can be activated on demand.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable
 
     from bleak import BleakClient
     from homeassistant.core import HomeAssistant
@@ -60,9 +61,12 @@ def register_ha_active_scan(
         async_register_callback,
     )
 
-    return async_register_callback(
-        hass,
-        callback,
-        BluetoothCallbackMatcher(address=address.upper()),
-        BluetoothScanningMode.ACTIVE,
+    return cast(
+        "Callable[[], None]",
+        async_register_callback(
+            hass,
+            callback,
+            BluetoothCallbackMatcher(address=address.upper()),
+            BluetoothScanningMode.ACTIVE,
+        ),
     )

@@ -15,18 +15,6 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlow
 
-# Import for test patching (used in config_flow_sig/config_flow_telink submodules)
-try:
-    from bleak import BleakScanner
-    from tuya_ble_mesh.sig_mesh_bridge import SIGMeshBridgeDevice
-    from tuya_ble_mesh.sig_mesh_device import SIGMeshDevice
-
-    find_device_by_address = BleakScanner.find_device_by_address
-except ImportError:
-    SIGMeshBridgeDevice = None  # type: ignore[misc,assignment]
-    SIGMeshDevice = None  # type: ignore[misc,assignment]
-    find_device_by_address = None  # type: ignore[misc,assignment]
-
 if TYPE_CHECKING:
     from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
     from homeassistant.data_entry_flow import FlowResult
@@ -70,7 +58,6 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
     _validate_vendor_id,
 )
 from custom_components.tuya_ble_mesh.const import (
-    CONF_ADAPTER,
     CONF_APP_KEY,
     CONF_BRIDGE_HOST,
     CONF_BRIDGE_PORT,
@@ -96,6 +83,12 @@ from custom_components.tuya_ble_mesh.const import (
     DOMAIN,
 )
 
+# Backward-compatible patch points for older tests/extensions. Runtime BLE
+# discovery and connections are implemented by the HA-routed helper modules.
+SIGMeshBridgeDevice: Any = None
+SIGMeshDevice: Any = None
+find_device_by_address: Any = None
+
 _LOGGER = logging.getLogger(__name__)
 
 # Allowlist of ValueError message strings that are valid HA translation keys.
@@ -118,7 +111,7 @@ _KNOWN_BLE_ERROR_KEYS: frozenset[str] = frozenset(
 class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for Tuya BLE Mesh."""
 
-    VERSION = 1
+    VERSION = 2
 
     @staticmethod
     def async_get_options_flow(
@@ -178,7 +171,6 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
             "net_key": CONF_NET_KEY,
             "dev_key": CONF_DEV_KEY,
             "app_key": CONF_APP_KEY,
-            "adapter": CONF_ADAPTER,
             "bridge_host": CONF_BRIDGE_HOST,
             "bridge_port": CONF_BRIDGE_PORT,
         }
@@ -218,7 +210,7 @@ class TuyaBLEMeshConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
             return self.async_abort(reason="invalid_import")
         self._discovery_info = {
             "address": mac,
-            "name": str(user_input.get("name") or f"SIG Mesh Light {mac[-8:]}")
+            "name": str(user_input.get("name") or f"SIG Mesh Light {mac[-8:]}"),
         }
         return await self.async_step_sig_light(user_input)
 

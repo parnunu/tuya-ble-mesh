@@ -21,7 +21,6 @@ from custom_components.tuya_ble_mesh.config_flow_validators import (
     _validate_unicast_address,
 )
 from custom_components.tuya_ble_mesh.const import (
-    CONF_ADAPTER,
     CONF_APP_KEY,
     CONF_BIND_MODELS,
     CONF_BRIDGE_HOST,
@@ -92,20 +91,12 @@ async def configure_existing_sig_light(
 
     data = dict(config_data)
     data[CONF_DEVICE_TYPE] = DEVICE_TYPE_SIG_LIGHT
-    ble_device_callback = None
-    ble_connect_callback = None
-    cancel_active_scan = None
-    if not data.get(CONF_ADAPTER):
 
-        def _on_ble_device_found(_service_info: Any, _change: Any) -> None:
-            """Keep the target-specific HA active-scan request alive."""
+    def _on_ble_device_found(_service_info: Any, _change: Any) -> None:
+        """Keep the target-specific HA active-scan request alive."""
 
-        ble_device_callback, ble_connect_callback = create_ha_ble_callbacks(
-            hass, "SIG Mesh import"
-        )
-        cancel_active_scan = register_ha_active_scan(
-            hass, mac, _on_ble_device_found
-        )
+    ble_device_callback, ble_connect_callback = create_ha_ble_callbacks(hass, "SIG Mesh import")
+    cancel_active_scan = register_ha_active_scan(hass, mac, _on_ble_device_found)
 
     device = create_device(
         DEVICE_TYPE_SIG_LIGHT,
@@ -289,6 +280,8 @@ async def run_provision(hass: Any, mac: str) -> tuple[str, str, str]:
         DictSecretsManager(secrets_dict),
         op_item_prefix=op_prefix,
         iv_index=DEFAULT_IV_INDEX,
+        ble_device_callback=_ble_device_cb,
+        ble_connect_callback=_ble_connect_cb,
     )
     try:
         await device.connect(timeout=20.0, max_retries=5)
@@ -446,7 +439,6 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
                 "net_key": str(user_input[CONF_NET_KEY]),
                 "dev_key": str(user_input[CONF_DEV_KEY]),
                 "app_key": str(user_input[CONF_APP_KEY]),
-                "adapter": str(user_input.get(CONF_ADAPTER, "hci0")),
             }
             if CONF_INITIAL_SEQUENCE in user_input or user_input.get(CONF_BIND_MODELS, False):
                 extra[CONF_INITIAL_SEQUENCE] = initial_sequence
@@ -471,7 +463,6 @@ async def async_step_sig_light(flow: Any, user_input: dict[str, Any] | None) -> 
                 vol.Optional(CONF_UNICAST_TARGET, default="00B0"): str,
                 vol.Optional(CONF_UNICAST_OUR, default="0001"): str,
                 vol.Optional(CONF_IV_INDEX, default=DEFAULT_IV_INDEX): int,
-                vol.Optional(CONF_ADAPTER, default="hci0"): str,
                 vol.Optional(CONF_INITIAL_SEQUENCE, default=0): vol.All(
                     vol.Coerce(int), vol.Range(min=0, max=0xFFFFFF)
                 ),

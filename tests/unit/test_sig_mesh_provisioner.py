@@ -341,6 +341,7 @@ class TestProvisionerConnect:
         mock_client = MagicMock()
         mock_client.is_connected = False  # Connection failed
         mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
 
         with (
             patch(
@@ -364,6 +365,7 @@ class TestProvisionerConnect:
         mock_client = MagicMock()
         mock_client.is_connected = True
         mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
         mock_client.mtu_size = 23
 
         # Mock get_services to return services WITHOUT PROV_SERVICE
@@ -565,6 +567,33 @@ class TestProvisionMethod:
             assert result == mock_result
             mock_client.stop_notify.assert_called()
             mock_client.disconnect.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_provision_with_ha_callbacks_skips_local_cleanup(self) -> None:
+        """HA-managed provisioning must not invoke local bluetoothctl cleanup."""
+        mock_device = MagicMock()
+        prov = SIGMeshProvisioner(
+            b"\x00" * 16,
+            b"\x01" * 16,
+            0x00B0,
+            ble_device_callback=MagicMock(return_value=mock_device),
+            ble_connect_callback=AsyncMock(),
+        )
+        mock_client = MagicMock()
+        mock_client.stop_notify = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_result = MagicMock(spec=ProvisioningResult)
+
+        with (
+            patch.object(prov, "_cleanup_stale_connections", new_callable=AsyncMock) as cleanup,
+            patch.object(prov, "_connect", new=AsyncMock(return_value=mock_client)),
+            patch.object(prov, "_run_exchange", new=AsyncMock(return_value=mock_result)),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await prov.provision("AA:BB:CC:DD:EE:FF")
+
+        assert result is mock_result
+        cleanup.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_provision_disconnect_on_failure(self) -> None:
